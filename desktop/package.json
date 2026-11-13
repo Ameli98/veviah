@@ -1,0 +1,13 @@
+{
+  "name": "hsin-companion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HSIN desktop companion: the avatar in a transparent always-on-top window (Windows Electron), fed by the companion server in WSL",
+  "main": "main.js",
+  "devDependencies": {
+    "electron": "44.9.0"
+  },
+  "dependencies": {
+    "koffi": "^2.12.0"
+  }
+}

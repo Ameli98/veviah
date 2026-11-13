@@ -1,0 +1,44 @@
+# Windows TTS environment for GPT-SoVITS inference (api_v2) + Whisper transcription (2026-11-13).
+# Installed by mcp_server/voice_install.mjs AFTER torch / torchaudio (cu128 index), with constraints_win.txt
+# pinning every package to the versions tested on 2026-11-12. Left out on purpose (web UI, training, Chinese ASR
+# training, the GPU build of onnxruntime): gradio, tensorboard, funasr, modelscope, onnxruntime-gpu.
+numpy
+scipy
+librosa
+numba
+matplotlib
+pytorch-lightning
+ffmpeg-python
+onnxruntime
+tqdm
+cn2an
+pypinyin
+g2p_en
+nltk
+sentencepiece
+transformers
+peft
+chardet
+PyYAML
+psutil
+jieba
+split-lang
+fast_langdetect
+wordsegment
+rotary_embedding_torch
+ToJyutping
+g2pk2
+ko_pron
+opencc
+fastapi
+uvicorn
+python-multipart
+x_transformers
+torchmetrics
+pydantic
+pyopenjtalk-plus
+faster-whisper
+ctranslate2
+av
+soundfile
+resampy

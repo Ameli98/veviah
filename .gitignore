@@ -1,0 +1,12 @@
+# models: only the two bundled ones are part of this repository
+*.vrm
+!vrm_player/public/models/VRM1_Constraint_Twist_Sample.vrm
+!vrm_player/public/models/vivi.vrm
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+vrm_player/dist/
+vrm_player/dist-*/
+.DS_Store
+*.swp

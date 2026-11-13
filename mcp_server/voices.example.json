@@ -1,0 +1,21 @@
+{
+  "voices": [
+    {
+      "name": "my-voice",
+      "engine": "gpt-sovits",
+      "root": "/path/to/GPT-SoVITS",
+      "python": "/path/to/conda/envs/<env>/bin/python",
+      "version": "v2Pro",
+      "gpt": "/path/to/GPT-SoVITS/GPT_weights_v2Pro/my-voice-e10.ckpt",
+      "sovits": "/path/to/GPT-SoVITS/SoVITS_weights_v2Pro/my-voice_e8.pth",
+      "refs": "/path/to/refs/refs.list",
+      "lang": "ja"
+    },
+    {
+      "name": "already-running-api-v2",
+      "url": "http://127.0.0.1:9880",
+      "refs": "/path/to/refs/refs.list",
+      "lang": "zh"
+    }
+  ]
+}

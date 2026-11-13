@@ -1,0 +1,467 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>VEviaH</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; media-src blob:">
+  <style>
+    :root { --bg: #f6f7f9; --card: #fff; --ink: #1f2933; --dim: #616e7c; --line: #e4e7eb; --acc: #3b6fd8; --ok: #2f8f5b; --warn: #b7791f; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1c1f24; --card: #262a31; --ink: #e8eaed; --dim: #9aa5b1; --line: #343a43; --acc: #7aa2f7; --ok: #5fc48d; --warn: #e0a84f; } }
+    a { color: var(--acc); text-decoration: none; } a:hover { text-decoration: underline; }   /* links in the theme color (the browser blue vanished on dark) */
+    body { margin: 0; padding: 20px; background: var(--bg); color: var(--ink); font: 14px "Microsoft JhengHei", "Yu Gothic UI", system-ui, sans-serif; }
+    h1 { font-size: 18px; margin: 0 0 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    h2 { font-size: 14px; margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+    .n { width: 22px; height: 22px; border-radius: 50%; background: var(--line); display: inline-grid; place-items: center; font-size: 12px; }
+    .done .n { background: var(--ok); color: #fff; }
+    p { margin: 4px 0 10px; color: var(--dim); line-height: 1.5; }
+    button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+    button.main { background: var(--acc); border-color: var(--acc); color: #fff; }
+    .refs { width: 100%; border-collapse: collapse; margin: 6px 0; } .refs td { padding: 4px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
+    .refs td.e { width: 56px; color: var(--dim); } .refs select { max-width: 100%; width: 100%; } .refs input.tx { width: 100%; font: inherit; }
+    .refs button { padding: 3px 8px; } details { margin-top: 10px; } summary { cursor: pointer; color: var(--acc); } .row { margin: 6px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    select, input[type=number] { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+    input[type=number] { width: 64px; }
+    input[type=password], input:not([type]), textarea { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+    .path { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; color: var(--dim); }
+    pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px; margin: 8px 0; }
+    .msg { margin-top: 8px; font-size: 13px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    label { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+    ol { margin: 4px 0 8px 18px; padding: 0; color: var(--dim); line-height: 1.6; }
+    .note { font-size: 12px; color: var(--dim); margin: 2px 0 6px 0; }
+    .note.warn { color: var(--warn); }
+  </style>
+</head>
+<body>
+  <h1><span data-t="title"></span>
+    <label style="margin:0;font-size:13px;font-weight:normal"><span data-t="uiLang"></span>
+      <select id="uiLang"><option value="zh">中文</option><option value="en">English</option><option value="ja">日本語</option></select></label></h1>
+
+  <div class="card" id="s1">
+    <h2><span class="n">1</span><span data-t="s1"></span></h2>
+    <p><span data-t="current"></span><b id="modelName"></b><br><span class="path" id="modelPath"></span></p>
+    <div class="row"><button id="choose" data-t="choose"></button></div>
+    <div class="msg" id="m1"></div>
+  </div>
+
+  <!-- how to chat (the API version, 2026-11-13, Q1): in another AI program through MCP, or in our own chat window -->
+  <div class="card" id="sMode">
+    <h2><span class="n">2</span><span data-t="modeTitle"></span></h2>
+    <label><input type="radio" name="mode" value="mcp"> <span data-t="modeMcp"></span></label>
+    <label><input type="radio" name="mode" value="builtin"> <span data-t="modeBuiltin"></span></label>
+    <div id="chatBox" style="display:none">
+      <div class="row"><span data-t="provider"></span> <select id="provider"></select></div>
+      <div class="row" id="urlMore"><a href="#" id="showUrl" data-t="changeUrl"></a></div>
+      <div class="row" id="urlRow"><span>URL</span> <input id="baseUrl" class="tx" style="flex:1;font:inherit"></div>
+      <div class="row"><span data-t="chatModel"></span> <select id="modelPick" style="flex:1"></select></div>
+      <div class="row" id="searchRow"><input id="modelSearch" style="flex:1;font:inherit"></div>
+      <p class="note" id="priceNote"></p>
+      <div class="row" id="keyRow"><span data-t="apiKey"></span> <input id="apiKey" type="password" style="flex:1;font:inherit" autocomplete="off"> <button id="saveKey" data-t="saveKey"></button> <button id="clearKey" data-t="clearKey"></button></div>
+      <p class="note" id="keyNote"></p>
+      <div class="row"><span data-t="descMode"></span> <select id="descMode"></select></div>
+      <p class="note" data-t="personaHelp"></p>
+      <textarea id="persona" rows="4" style="width:100%;box-sizing:border-box;font:inherit"></textarea>
+      <div class="row"><span data-t="hotkey"></span> <input id="hotkey" readonly style="width:170px;cursor:pointer"> <span class="note" id="hotkeyNote"></span></div>
+      <div class="row"><button id="chatTest" data-t="chatTest"></button> <button class="main" id="openChat" data-t="openChat"></button></div>
+      <div class="msg" id="mc"></div>
+    </div>
+  </div>
+
+  <div class="card" id="s2">
+    <h2><span class="n">3</span><span data-t="s2"></span></h2>
+    <p data-t="s2p"></p>
+    <!-- every AI program alike (2026-11-13, Q13): found ones with one-click connect, others by file or by hand -->
+    <table id="progs" class="refs"></table>
+    <div class="msg" id="m2"></div>
+    <details id="otherBox"><summary data-t="otherTitle"></summary>
+      <p class="note" data-t="otherHelp"></p>
+      <div class="row"><span data-t="pickProgram"></span> <select id="otherProg"></select> <button id="otherFile" data-t="pickConfig"></button></div>
+      <p class="note" id="manualSteps"></p>
+      <pre id="snip"></pre>
+      <div class="row"><button id="copyJson" data-t="copyJson"></button> <button id="copyToml" data-t="copyToml"></button></div>
+      <div class="msg" id="mo"></div>
+    </details>
+  </div>
+
+  <div class="card" id="s3">
+    <h2><span class="n">4</span><span data-t="s3"></span></h2>
+    <ol><li data-t="s3a"></li><li data-t="s3b"></li><li data-t="s3c"></li></ol>
+    <pre id="instr"></pre>
+    <div class="row"><button class="main" id="copy" data-t="copy"></button></div>
+    <div class="msg" id="m3"></div>
+  </div>
+
+  <div class="card">
+    <h2 data-t="voiceCard"></h2>
+    <label><input type="checkbox" id="voice"> <span data-t="voiceOn"></span></label>
+    <!-- first-voice-on download (2026-11-13, mcp_server/voice_install.mjs via /voice/install) -->
+    <div id="installBox" style="display:none">
+      <h3 data-t="installTitle"></h3>
+      <p class="note" data-t="installNeed"></p>
+      <div class="row"><span data-t="installDir"></span> <span class="path" id="instDir"></span> <button id="instChange" data-t="changeDir"></button></div>
+      <progress id="instBar" max="1" value="0" style="width:100%;display:none"></progress>
+      <div class="note" id="instDetail"></div>
+      <div class="row"><button id="instGo" class="primary"></button> <button id="instCancel" data-t="installCancel"></button></div>
+      <div class="msg" id="mi"></div>
+    </div>
+    <div id="voiceBox">
+      <label><span data-t="voiceName"></span> <select id="voiceName"></select></label>
+      <label><span data-t="voiceLang"></span>
+        <select id="voiceLang"><option value="zh">中文</option><option value="en">English</option><option value="ja">日本語</option></select></label>
+      <div class="note" id="trained"></div>
+      <label><span data-t="release"></span> <input type="number" id="release" min="0" max="240" step="1"></label>
+      <details id="refsBox"><summary data-t="refsTitle"></summary>
+        <p class="note" data-t="refsHelp"></p>
+        <table id="refs" class="refs"></table>
+        <div class="msg" id="mr"></div>
+      </details>
+      <details id="addBox"><summary data-t="addVoice"></summary>
+        <p class="note" data-t="addVoiceHelp"></p>
+        <div class="row"><span data-t="newName"></span> <input id="nvName" maxlength="40"></div>
+        <div class="row"><button id="nvGpt" data-t="gptFile"></button> <span class="note" id="nvGptP"></span></div>
+        <div class="row"><button id="nvSov" data-t="sovitsFile"></button> <span class="note" id="nvSovP"></span></div>
+        <div class="row"><button id="nvRefs" data-t="refsFolder"></button> <span class="note" id="nvRefsP"></span></div>
+        <div class="row"><span data-t="trainedIn"></span> <select id="nvLang"><option value="ja">日本語</option><option value="zh">中文</option><option value="en">English</option></select></div>
+        <button id="nvAdd" data-t="add"></button>
+        <div class="msg" id="mn"></div>
+      </details>
+    </div>
+    <div class="msg" id="mv"></div>
+    <div class="row" id="instRemoveRow" style="display:none"><button id="instRemove" data-t="removeVoice"></button></div>
+  </div>
+
+  <div class="card">
+    <h2 data-t="window"></h2>
+    <label><input type="checkbox" id="ontop"> <span data-t="ontopBox"></span></label>
+    <label><input type="checkbox" id="autostart"> <span data-t="autostart"></span></label>
+    <label><span data-t="jiggleBox"></span> <select id="jiggle"></select></label>
+    <p data-t="windowHelp"></p>
+  </div>
+  <p style="text-align:center;font-size:12px"><a href="#" id="credits" data-t="credits"></a></p>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let T = {}, S = null;
+    const msg = (id, t, ok = true) => { $(id).textContent = t; $(id).style.color = ok ? 'var(--ok)' : '#d64545'; };
+    const fmt = (s, v = {}) => String(s ?? '').replace(/\{(\w+)\}/g, (_, k) => v[k] ?? '');
+    function voiceView() {
+      const sp = S.speech, info = S.speechInfo;
+      $('voice').checked = sp.voice;
+      const voices = info?.voices ?? [];
+      $('voiceBox').style.display = sp.voice && voices.length ? '' : 'none';
+      $('voiceName').innerHTML = voices.map((v) => `<option value="${v.name}">${v.name}</option>`).join('');
+      const v = voices.find((x) => x.name === (info?.voice ?? sp.voiceName)) ?? voices[0];
+      if (v) $('voiceName').value = v.name;
+      $('voiceLang').value = info?.settings?.voiceLang ?? sp.voiceLang ?? v?.lang ?? 'ja';
+      const trained = v?.lang, other = trained && $('voiceLang').value !== trained;
+      $('trained').textContent = trained ? fmt(T.trained, { l: T.langIn[trained] }) + (other ? ' ' + T.accent : '') : '';
+      $('trained').classList.toggle('warn', !!other);
+      $('release').value = sp.releaseMin;
+      if (!voices.length) msg('mv', IN?.supported ? '' : T.noVoices, !IN?.supported);   // with the download box the box says it
+      else { const st = info?.state ?? 'off'; msg('mv', (T.voiceState[st] ?? st) + (st === 'error' ? info.error : ''), st !== 'error'); }
+    }
+    async function refresh() {
+      S = await hsin.state(); T = S.t;
+      document.title = T.title; document.documentElement.lang = S.uiLang;
+      for (const el of document.querySelectorAll('[data-t]')) el.textContent = T[el.dataset.t] ?? '';
+      $('uiLang').value = S.uiLang;
+      $('jiggle').innerHTML = Object.entries(T.jiggleLevels).map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
+      $('modelName').textContent = S.modelName; $('modelPath').textContent = S.model;
+      $('instr').textContent = S.instructions;
+      $('ontop').checked = S.onTop; $('autostart').checked = S.autostart; $('jiggle').value = S.jiggle;
+
+      $('s1').classList.add('done');   // no confirm button (2026-11-11): the default model counts as chosen, a picked file applies at once
+      $('s3').classList.toggle('done', S.copied);
+      progsView(); chatView();
+      voiceView(); installView();
+      return S;
+    }
+    // ---- built-in chat (chat_main.js) ----
+    // the model drop-down is filled from the provider's own list (2026-11-13, the author: nobody types model names; a
+    // service without a list is not supported); a search box once the list is long (OpenRouter: ~400)
+    let urlOpen = false;
+    let CV = null, MODELS = null, modelsFor = null, modelsErr = null;
+    const SEARCH_FROM = 15;
+    const CLAUDE = [['claude-opus-5-5', 'Claude Opus 5.5', '$4 / $20'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5', '$2 / $10'],
+                    ['claude-haiku-5-5', 'Claude Haiku 5.5', '$0.1 / $0.5'], ['claude-fable-5-2', 'Claude Fable 5.2', '$8 / $40']].map(([id, name, price]) => ({ id, name, price }));
+    const label = (m) => (!m.price ? m.name : S.uiLang === "en" ? `${m.name} (${m.price})` : `${m.name}（${m.price}）`);
+    async function loadModels() {
+      const k = `${CV.provider}|${CV.baseUrl}|${CV.hasKey}`;
+      if (modelsFor === k) return;
+      modelsFor = k; MODELS = null; modelsErr = null;
+      if (!CV.hasKey && !CV.local) { modelPicker(); return; }
+      $('modelPick').innerHTML = `<option>${T.loadingModels}</option>`; $('modelPick').disabled = true;
+      const r = await hsin.chatModels();
+      if (modelsFor !== k) return;
+      MODELS = r.ok ? r.models : []; modelsErr = r.ok ? null : r.error;
+      // Anthropic's list could not be fetched (a wrong key, no network): the four current Claude models (agreed 2026-11-13)
+      if (!r.ok && CV.kind === 'anthropic') MODELS = CLAUDE;
+      // nothing chosen yet, or the saved one is not offered: take the first
+      if (MODELS.length && !MODELS.some((m) => m.id === CV.model)) { await setChat({ model: MODELS[0].id }); return; }
+      modelPicker();
+    }
+    function modelPicker() {
+      const pick = $('modelPick'), q = $('modelSearch').value.trim().toLowerCase();
+      const all = MODELS ?? [];
+      $('searchRow').style.display = all.length > SEARCH_FROM ? '' : 'none';
+      const shown = all.filter((m) => !q || m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || m.id === CV.model);
+      pick.innerHTML = shown.map((m) => `<option value="${m.id}">${label(m)}</option>`).join('');
+      pick.disabled = !shown.length;
+      if (!all.length) pick.innerHTML = `<option>${!CV.hasKey && !CV.local ? T.keyFirst : ''}</option>`;
+      pick.value = CV.model;
+      const cur = all.find((m) => m.id === CV.model);
+      $('priceNote').textContent = CV.local ? T.localNote : cur?.price ? fmt(T.priceNote, { p: cur.price }) : all.length ? T.otherPriceNote : '';
+      if (modelsErr) msg('mc', T.chatErr[modelsErr] ?? T.chatErr.other, false);
+    }
+    async function chatView(v) {
+      CV = v ?? await hsin.chatView();
+      for (const r of document.querySelectorAll('input[name=mode]')) r.checked = r.value === CV.mode;
+      const b = CV.mode === 'builtin';
+      $('chatBox').style.display = b ? '' : 'none';
+      $('s2').style.display = b ? 'none' : ''; $('s3').style.display = b ? 'none' : '';
+      $('sMode').classList.toggle('done', b ? CV.ready : true);
+      $('provider').innerHTML = CV.providers.map((p) => `<option value="${p}">${T.providers[p] ?? p}</option>`).join('');
+      $('provider').value = CV.provider;
+      // the URL only where it is needed (2026-11-13): 'other' always; a local server (Ollama / LM Studio) behind a link; never for cloud presets
+      const custom = CV.provider === 'custom';
+      $('urlRow').style.display = custom || (CV.local && urlOpen) ? '' : 'none';
+      $('urlMore').style.display = CV.local && !urlOpen && !custom ? '' : 'none';
+      $('baseUrl').value = CV.baseUrl;
+      $('modelSearch').placeholder = T.searchModels;
+      $('keyRow').style.display = CV.local ? 'none' : '';
+      $('apiKey').value = ''; $('apiKey').placeholder = CV.hasKey ? T.keySaved : '';
+      $('keyNote').textContent = CV.local ? '' : CV.canEncrypt ? T.keyNote : T.keyNoEncrypt;
+      $('saveKey').disabled = !CV.canEncrypt; $('clearKey').style.display = CV.hasKey ? '' : 'none';
+      $('descMode').innerHTML = ['auto', 'long', 'short'].map((k) => `<option value="${k}">${T.descModes[k]}</option>`).join('');
+      $('descMode').value = CV.desc;
+      if (document.activeElement !== $('persona')) $('persona').value = CV.persona;
+      $('persona').placeholder = T.personaPlaceholder;
+      const shownKey = CV.hotkey.replace('Control', 'Ctrl');
+      $('openChat').textContent = fmt(T.openChat, { k: shownKey });
+      if (document.activeElement !== $('hotkey')) $('hotkey').value = shownKey;
+      $('hotkeyNote').textContent = CV.hotkeyOk ? '' : T.hotkeyTaken; $('hotkeyNote').classList.toggle('warn', !CV.hotkeyOk);
+      modelPicker();
+      if (b) loadModels();
+    }
+    const setChat = async (v) => chatView(await hsin.setChat(v));
+    for (const r of document.querySelectorAll('input[name=mode]')) r.onchange = () => setChat({ mode: r.value });
+    $('showUrl').onclick = (e) => { e.preventDefault(); urlOpen = true; chatView(CV); };
+    $('provider').onchange = () => { urlOpen = false; msg('mc', ''); $('modelSearch').value = ''; setChat({ provider: $('provider').value }); };
+    $('modelPick').onchange = () => setChat({ model: $('modelPick').value });
+    $('modelSearch').oninput = () => modelPicker();
+    $('baseUrl').onchange = () => { msg('mc', ''); setChat({ baseUrl: $('baseUrl').value.trim() }); };
+    $('descMode').onchange = () => setChat({ desc: $('descMode').value });
+    $('persona').onchange = () => setChat({ persona: $('persona').value });
+    $('saveKey').onclick = async () => { if ($('apiKey').value.trim()) { msg('mc', T.keyStored); await setChat({ key: $('apiKey').value }); } };   // a list error that follows stays visible
+    $('clearKey').onclick = async () => { await setChat({ clearKey: true }); msg('mc', ''); };
+    $('chatTest').onclick = async () => {
+      msg('mc', '…');
+      const r = await hsin.chatTest();
+      msg('mc', r.ok ? T.chatTestOk : (T.chatErr[r.error] ?? T.chatErr.other) + (r.error === 'other' && r.message ? ` (${r.message})` : ''), r.ok);
+    };
+    $('openChat').onclick = () => hsin.openChat();
+    $('credits').onclick = (e) => { e.preventDefault(); hsin.openCredits(); };
+    // the hotkey field: click it, press the combination (Ctrl and / or Alt + a key, or an F key alone)
+    $('hotkey').onfocus = () => { $('hotkey').value = T.hotkeyPress; };
+    $('hotkey').onblur = () => chatView(CV);
+    $('hotkey').onkeydown = async (e) => {
+      e.preventDefault();
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+      if (e.key === 'Escape') { $('hotkey').blur(); return; }
+      const code = e.code;
+      const key = /^Key[A-Z]$/.test(code) ? code.slice(3) : /^Digit\d$/.test(code) ? code.slice(5) : /^F([1-9]|1[0-2])$/.test(code) ? code : code === 'Space' ? 'Space' : null;
+      if (!key || (!e.ctrlKey && !e.altKey && !/^F/.test(key))) { $('hotkeyNote').textContent = T.hotkeyNeedMod; return; }
+      const acc = [e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift', key].filter(Boolean).join('+');
+      const v = await hsin.setChat({ hotkey: acc });
+      $('hotkey').blur(); await chatView(v);
+      if (v.taken) { $('hotkeyNote').textContent = fmt(T.hotkeyRefused, { k: acc.replace('Control', 'Ctrl') }); $('hotkeyNote').classList.add('warn'); }
+    };
+    // ---- voice engine download ----
+    let IN = null, instDir = null, instPoll = null;
+    async function installView() {
+      IN = await hsin.voiceApi('GET', `/voice/install${instDir ? '?' + q({ dir: instDir }) : ''}`);
+      const box = $('installBox');
+      if (!IN?.supported) { box.style.display = 'none'; $('instRemoveRow').style.display = 'none'; return; }
+      // no usable NVIDIA card (checked at every app start, Q15): voice is not offered, the setting itself is kept
+      const noGpu = IN.gpu && !IN.gpu.ok;
+      $('voice').disabled = noGpu;
+      if (noGpu) {
+        box.style.display = 'none'; $('voiceBox').style.display = 'none'; $('instRemoveRow').style.display = 'none';
+        msg('mv', IN.gpu.reason === 'driver' ? T.oldDriver : T.noGpu, false);
+        return;
+      }
+      const running = IN.status === 'running';
+      if (IN.needed) msg('mv', '');
+      box.style.display = ($('voice').checked && IN.needed) || running || IN.status === 'error' ? '' : 'none';
+      $('instRemoveRow').style.display = IN.status === 'installed' && !running ? '' : 'none';
+      instDir ??= IN.dir;
+      $('instDir').textContent = instDir;
+      $('instChange').disabled = running;
+      $('instGo').textContent = IN.status === 'error' || IN.status === 'cancelled' ? T.installRetry : T.installBtn;
+      $('instGo').style.display = running ? 'none' : '';
+      $('instCancel').style.display = running ? '' : 'none';
+      const short = IN.freeGB != null && IN.freeGB < IN.needGB;
+      $('instGo').disabled = short;
+      $('instBar').style.display = running ? '' : 'none';
+      if (running) {
+        const label = T.installSteps[IN.step] ?? IN.step ?? '';
+        const mb = IN.total ? ` ${Math.round(IN.bytes / 1e6)} / ${Math.round(IN.total / 1e6)} MB` : '';
+        $('instBar').value = IN.total ? IN.bytes / IN.total : (IN.done.length / IN.steps.length);
+        if (!IN.total) $('instBar').removeAttribute('value');
+        msg('mi', T.installing + label + mb);
+        $('instDetail').textContent = (IN.detail ?? '').slice(0, 140);
+      } else {
+        $('instDetail').textContent = '';
+        if (IN.status === 'error') msg('mi', IN.error === 'nogpu' ? T.noGpu : /^driver/.test(IN.error ?? '') ? T.oldDriver
+          : fmt(T.installErr, { s: T.installSteps[IN.step] ?? IN.step }) + IN.error, false);
+        else if (short) msg('mi', fmt(T.installFree, { f: IN.freeGB, n: IN.needGB }), false);
+        else msg('mi', '');
+      }
+      clearTimeout(instPoll);
+      if (running) instPoll = setTimeout(installView, 1000);
+      else if (IN.status === 'installed' && IN.done?.length) { S = await hsin.state(); voiceView(); }
+    }
+    $('instChange').onclick = async () => {
+      const d = await hsin.choosePath('folder'); if (!d) return;
+      instDir = d.replace(/[\\/]+$/, '') + (d.includes('/') ? '/' : '\\') + 'veviah_tts';   // own subfolder: removal deletes only that
+      installView();
+    };
+    $('instGo').onclick = async () => { await hsin.voiceApi('POST', '/voice/install', { dir: instDir }); installView(); };
+    $('instCancel').onclick = async () => { await hsin.voiceApi('POST', '/voice/install/cancel', {}); installView(); };
+    $('instRemove').onclick = async () => {
+      if (!confirm(T.removeConfirm)) return;
+      const r = await hsin.voiceApi('POST', '/voice/install/remove', {});
+      if (r?.error) msg('mv', r.error, false); else { msg('mv', T.removed); await hsin.setSpeech({ voice: false }); await refresh(); }
+      installView();
+    };
+    // the voice state changes by itself (loading -> ready): look again now and then while this page is open
+    setInterval(async () => { if (S?.speech.voice && S.speechInfo?.state !== 'ready') { S = await hsin.state(); voiceView(); } }, 2000);
+    $('uiLang').onchange = async (e) => { await hsin.setUiLang(e.target.value); await refresh(); if (S.copied) msg('m3', T.copied); };
+    $('choose').onclick = async () => {
+      msg('m1', T.loading);
+      const r = await hsin.chooseModel();
+      if (r.canceled) { msg('m1', ''); return refresh(); }
+      await refresh();
+      msg('m1', r.ok ? T.modelSwapped : T.serverNotUp, r.ok);
+    };
+    // ---- step 2: the AI programs (clients.js through main.js) ----
+    let CL = null;
+    const otherId = () => $('otherProg').value;
+    async function progsView() {
+      CL = await hsin.clients();
+      const found = CL.programs.filter((c) => c.installed);
+      const label = (c) => (c.seen ? T.stSeen : c.stale ? T.stStale : c.connected ? T.stConnected : T.stNot);
+      $('progs').innerHTML = found.map((c) => `<tr><td>${c.name}</td><td class="note">${label(c)}</td><td style="white-space:nowrap">` +
+        (c.manual ? `<button data-steps="${c.id}">${T.steps}</button>`
+          : `${!c.connected || c.stale ? `<button class="main" data-c="${c.id}">${T.connect}</button>` : ''}` +
+            `${c.connected ? ` <button data-d="${c.id}">${T.disconnect}</button>` : ''}`) + '</td></tr>').join('');
+      if (!found.length) msg('m2', T.noPrograms, false);
+      $('s2').classList.toggle('done', CL.programs.some((c) => c.seen || (c.connected && !c.stale)));
+      if (!$('otherProg').options.length) {
+        $('otherProg').innerHTML = CL.programs.map((c) => `<option value="${c.id}">${c.name}</option>`).join('') + `<option value="none">${T.noneOfThese}</option>`;
+        $('otherProg').value = 'none';
+      }
+      otherView();
+      for (const b of $('progs').querySelectorAll('button[data-c]')) b.onclick = async () => {
+        const c = CL.programs.find((x) => x.id === b.dataset.c);
+        msg('m2', T.loading);
+        const r = await hsin.connectClient(c.id);
+        msg('m2', r.ok ? (r.link ? fmt(T.linkDone, { p: c.name }) : fmt(r.restart ? T.connectDone : T.connected, { p: c.name })) : r.error, r.ok);
+        progsView();
+      };
+      for (const b of $('progs').querySelectorAll('button[data-d]')) b.onclick = async () => { await hsin.disconnectClient(b.dataset.d); progsView(); };
+      for (const b of $('progs').querySelectorAll('button[data-steps]')) b.onclick = () => { $('otherBox').open = true; $('otherProg').value = b.dataset.steps; otherView(); };
+    }
+    function otherView() {
+      const id = otherId(), c = CL?.programs.find((x) => x.id === id);
+      $('manualSteps').textContent = c?.manual ? T[`manual_${c.manual}`] : '';
+      $('otherFile').disabled = !c || c.how === 'cli' || c.how === 'link' || (c.manual && c.manual !== 'zed');
+      $('snip').textContent = id === 'codex' ? CL?.snippets.toml : CL?.snippets.json;
+    }
+    $('otherProg').onchange = otherView;
+    $('otherFile').onclick = async () => {
+      const r = await hsin.connectClientFile(otherId());
+      if (!r.canceled) msg('mo', r.ok ? T.connected : r.error, r.ok);
+      progsView();
+    };
+    $('copyJson').onclick = async () => { await hsin.copyText(CL.snippets.json); msg('mo', T.copied); };
+    $('copyToml').onclick = async () => { await hsin.copyText(CL.snippets.toml); msg('mo', T.copied); };
+    addEventListener('focus', () => progsView());   // back from the AI program: 'connected' may show now
+    $('copy').onclick = async () => { await hsin.copyInstructions(); msg('m3', T.copied); refresh(); };
+    $('ontop').onchange = (e) => hsin.setOnTop(e.target.checked);
+    $('jiggle').onchange = async (e) => { e.target.value = await hsin.setJiggle(e.target.value); };
+    $('autostart').onchange = async (e) => { e.target.checked = await hsin.setAutostart(e.target.checked); };
+    const speech = async (v) => { await hsin.setSpeech(v); await refresh(); };
+    // ---- reference clips per emotion (2026-11-12) ----
+    const EMO = ['neutral', 'happy', 'angry', 'sad', 'shy', 'surprised'];
+    let RT = null, player = null;
+    const curVoice = () => $('voiceName').value;
+    const q = (o) => Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+    async function play(p) {
+      msg('mr', T.loadingAudio, true);
+      const b = await hsin.voiceAudio(p);
+      if (!b || b.error) { msg('mr', T.refErr + (b?.error === 'voice_not_ready' ? T.voiceNotReady : (b?.error ?? '')), false); return; }
+      player?.pause(); player = new Audio(URL.createObjectURL(new Blob([b], { type: b[0] === 0x66 && b[1] === 0x4c ? 'audio/flac' : 'audio/wav' }))); player.play(); msg('mr', '', true);
+    }
+    const short = (t) => (t.length > 34 ? t.slice(0, 33) + '…' : t);
+    async function refsView() {
+      if (!$('refsBox').open || !curVoice()) return;
+      RT = await hsin.voiceApi('GET', `/voice/refs?${q({ voice: curVoice() })}`);
+      if (!RT || RT.error) { msg('mr', T.refErr + (RT?.error ?? ''), false); return; }
+      const groups = {};
+      for (const c of RT.pool) (groups[c.group] ??= []).push(c);
+      const opts = (cur) => Object.entries(groups).map(([g, cs]) => `<optgroup label="${T.emo[g] ?? g}">` +
+        cs.map((c) => `<option value="${encodeURIComponent(c.wav)}" ${c.wav === cur ? 'selected' : ''}>${short(c.text)}</option>`).join('') + '</optgroup>').join('');
+      $('refs').innerHTML = EMO.map((e) => {
+        const fixed = RT.custom.includes(e), n = RT.rotate?.[e]?.length ?? 0;
+        const c = RT.current[e]; const own = !!(fixed && c && RT.pool.find((x) => x.wav === c.wav)?.own);
+        const rot = n > 1 ? `<option value="" ${fixed ? '' : 'selected'}>${T.rotate.replace('{n}', n)}</option>` : '';
+        return `<tr><td class="e">${T.emo[e]}</td><td><select data-e="${e}">${rot}${opts(fixed || n <= 1 ? c?.wav : null)}</select>` +
+          (own ? `<input class="tx" data-w="${encodeURIComponent(c.wav)}" value="${(c.text ?? '').replace(/"/g, '&quot;')}">` : '') +
+          `</td><td style="white-space:nowrap"><button data-p="${e}" title="${T.playRef}">▶</button> <button data-v="${e}">${T.preview}</button> ` +
+          `<button data-a="${e}">${T.addClip}</button>${RT.custom.includes(e) ? ` <button data-r="${e}">${T.resetRef}</button>` : ''}</td></tr>`;
+      }).join('');
+      for (const el of $('refs').querySelectorAll('select')) el.onchange = async () => { await setRef(el.dataset.e, el.value ? decodeURIComponent(el.value) : null); };
+      for (const el of $('refs').querySelectorAll('input.tx')) el.onchange = async () => {
+        RT = await hsin.voiceApi('POST', '/voice/text', { voice: curVoice(), wav: decodeURIComponent(el.dataset.w), text: el.value }); refsView(); };
+      // while clips rotate, ▶ / preview take one of them at random (as a line would)
+      const clipOf = (e) => RT.custom.includes(e) || !RT.rotate?.[e]?.length ? RT.current[e] : RT.rotate[e][Math.floor(Math.random() * RT.rotate[e].length)];
+      for (const el of $('refs').querySelectorAll('button[data-p]')) el.onclick = () => play(`/voice/audio?${q({ voice: curVoice(), wav: clipOf(el.dataset.p).wav })}`);
+      for (const el of $('refs').querySelectorAll('button[data-v]')) el.onclick = () => play(`/voice/preview?${q({ voice: curVoice(), wav: clipOf(el.dataset.v).wav })}`);
+      for (const el of $('refs').querySelectorAll('button[data-r]')) el.onclick = () => setRef(el.dataset.r, null);
+      for (const el of $('refs').querySelectorAll('button[data-a]')) el.onclick = async () => {
+        const f = await hsin.choosePath('wav'); if (!f) return;
+        msg('mr', T.transcribing, true);
+        const r = await hsin.voiceApi('POST', '/voice/clip', { voice: curVoice(), file: f, group: el.dataset.a });
+        if (r.error) { msg('mr', /clip_length/.test(r.error) ? T.clipLength : T.refErr + r.error, false); return; }
+        await setRef(el.dataset.a, r.wav); msg('mr', T.clipAdded, true);
+      };
+    }
+    async function setRef(e, wav) {
+      const r = await hsin.voiceApi('POST', '/voice/ref', { voice: curVoice(), emotion: e, wav });
+      if (r.error) msg('mr', T.refErr + r.error, false); else { msg('mr', '', true); refsView(); }
+    }
+    $('refsBox').ontoggle = refsView;
+    const nv = { gpt: null, sovits: null, refs: null };
+    const pick = (kind, key, el) => async () => { const p = await hsin.choosePath(kind); if (p) { nv[key] = p; $(el).textContent = p; } };
+    $('nvGpt').onclick = pick('ckpt', 'gpt', 'nvGptP'); $('nvSov').onclick = pick('pth', 'sovits', 'nvSovP'); $('nvRefs').onclick = pick('folder', 'refs', 'nvRefsP');
+    $('nvAdd').onclick = async () => {
+      const name = $('nvName').value.trim();
+      if (!name || !nv.gpt || !nv.sovits || !nv.refs) { msg('mn', T.addMissing, false); return; }
+      msg('mn', T.adding, true); $('nvAdd').disabled = true;
+      const r = await hsin.voiceApi('POST', '/voice/add', { name, gpt: nv.gpt, sovits: nv.sovits, refsDir: nv.refs, lang: $('nvLang').value });
+      $('nvAdd').disabled = false;
+      if (r.error) { msg('mn', T.refErr + ({ bad_name: T.badName, no_clips: T.noClips }[r.error] ?? r.error), false); return; }
+      msg('mn', T.added.replace('{v}', r.version).replace('{n}', r.clips), true);
+      S = await hsin.state(); voiceView();
+    };
+
+    $('voice').onchange = async (e) => { await speech({ voice: e.target.checked }); installView(); };
+    $('voiceName').onchange = async (e) => { await speech({ voiceName: e.target.value, voiceLang: null }); refsView(); };
+    $('voiceLang').onchange = (e) => speech({ voiceLang: e.target.value });
+    $('release').onchange = (e) => speech({ releaseMin: Math.max(0, Number(e.target.value) || 0) });
+    refresh();
+  </script>
+</body>
+</html>

@@ -1,0 +1,655 @@
+<title>HSIN Motion Ranking</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one group per screen. Instruction on top, the clips in one row, and a dock fixed to the bottom
+   where the letters A-D are dragged into best-to-worst order or into "broken". fit() sizes the clips so
+   everything fits between the instruction and the dock without scrolling. */
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --ink: #1b2330; --muted: #5b6676; --line: #d5dbe4;
+  --accent: #2456c9; --accent-ink: #ffffff; --warn: #b3261e; --ok: #1f7a4d; --stage: #e9edf2;
+  --broken-bg: #fbeceb; --tray-bg: #eef1f5;
+  --sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --panel: #1b212b; --ink: #e8ecf2; --muted: #9aa5b5; --line: #323b49;
+  --accent: #7ea6ff; --accent-ink: #0d1422; --warn: #ff8f85; --ok: #6fd3a0; --stage: #e9edf2;
+  --broken-bg: #3a2225; --tray-bg: #222935; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1b212b; --ink: #e8ecf2; --muted: #9aa5b5; --line: #323b49;
+  --accent: #7ea6ff; --accent-ink: #0d1422; --warn: #ff8f85; --ok: #6fd3a0; --stage: #e9edf2;
+  --broken-bg: #3a2225; --tray-bg: #222935; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.65 var(--sans); }
+.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: flex; flex-direction: column; gap: 18px; }
+body.tasking .wrap { padding-bottom: var(--dock-h, 190px); padding-top: 12px; gap: 10px; }
+body.tasking header, body.tasking footer { display: none; }
+header .lang { min-height: 32px; }
+body.tasking .wrap { max-width: none; }
+body.tasking .instr-panel { padding: 10px 14px; }
+#task { gap: 10px !important; }
+h1 { font-size: 1.5rem; line-height: 1.3; margin: 0; text-wrap: balance; }
+h2 { font-size: 1.05rem; margin: 0; }
+p { margin: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.muted { color: var(--muted); }
+.small { font-size: .86rem; }
+ol.steps { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 8px 14px; min-height: 40px; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible, .chip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+input[type=text] { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 9px 12px; min-height: 40px; width: 100%; max-width: 320px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.instr { font-size: 1.12rem; font-weight: 500; }
+.top { display: flex; gap: 10px; align-items: stretch; }
+.top .instr-panel { flex: 1 1 auto; min-width: 0; justify-content: center; }
+.top .toolbar { flex: none; flex-wrap: nowrap; }
+.lang { flex: none; min-height: 38px; padding: 4px 12px; font-size: .86rem; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; min-height: 38px; padding: 6px 12px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); }
+label.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 0 12px; min-height: 40px; }
+label.switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; justify-content: center; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.card.is-broken { border-color: var(--warn); }
+.stage { position: relative; background: var(--stage); aspect-ratio: 5 / 6; overflow: hidden; max-width: 100%; cursor: pointer; }
+/* Each video holds the three views side by side, each already 5:6 like the stage (motion_loop.video --tall),
+   so the video is 3 stages wide; applyView() shifts it to the chosen view. */
+.stage video { position: absolute; top: 0; left: 0; height: 100%; width: 300%; max-width: none; display: block; }
+.tag { position: absolute; top: 8px; left: 8px; font: 500 1.05rem var(--mono); background: #1b2330; color: #fff; border-radius: 6px; padding: 1px 10px; }
+.status { position: absolute; top: 8px; right: 8px; font-size: .82rem; font-weight: 700; border-radius: 6px; padding: 1px 8px; background: #ffffffd9; color: #1b2330; }
+.status.bad { background: #b3261e; color: #fff; }
+.player { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; }
+.player .pp { min-height: 36px; width: 40px; padding: 0; display: grid; place-items: center; color: var(--accent); flex: none; }
+.player input[type=range] { flex: 1 1 90px; min-width: 0; accent-color: var(--accent); height: 28px; }
+.player .clock { font: 500 .78rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.player select { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; min-height: 32px; padding: 2px 4px; font-size: .86rem; }
+
+/* dock: three zones; letters are dragged between them, and within "ranking" left = best */
+.dock { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line);
+        padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -6px 18px #0000000f; z-index: 5; }
+.dock-in { max-width: 1800px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+.dock-in.cols { flex-direction: row; align-items: stretch; gap: 14px; }
+/* zones in one row whatever their content: each zone is as wide as its letters, "ranking" takes the rest */
+.zones { display: flex; gap: 10px; flex: 1 1 auto; min-width: 0; }
+.zones .zone { flex: 1 0 auto; }
+.zones .zone.rank { flex-grow: 3; }
+.zone { border: 2px dashed var(--line); border-radius: 10px; padding: 6px 8px; min-height: 74px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.zone.tray { background: var(--tray-bg); }
+.zone.broken { background: var(--broken-bg); }
+.zone.over { border-color: var(--accent); }
+.zone-head { font-size: .8rem; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.zone.broken .zone-head { color: var(--warn); }
+.zone-head span { white-space: nowrap; }
+.chips { display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; min-height: 44px; }
+.chip { font: 500 1.15rem var(--mono); width: 48px; height: 44px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);
+        display: grid; place-items: center; cursor: grab; touch-action: none; user-select: none; position: relative; }
+.zone.rank .chip { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.zone.broken .chip { background: var(--warn); color: #fff; border-color: var(--warn); text-decoration: line-through; }
+.chip .n { position: absolute; top: -9px; right: -7px; font: 700 .7rem var(--sans); background: var(--ink); color: var(--panel); border-radius: 9px; padding: 0 5px; }
+.chip.ghost { opacity: .35; }
+.chip.dragging { position: fixed; z-index: 10; pointer-events: none; box-shadow: 0 8px 20px #00000040; cursor: grabbing; }
+.caret { width: 4px; height: 40px; border-radius: 2px; background: var(--accent); }
+.dock-bar { display: flex; flex-direction: column; gap: 6px; justify-content: center; flex: none; width: 300px; }
+.bar-top, .bar-btns { display: flex; gap: 8px; align-items: center; }
+.bar-btns button { flex: 1 1 auto; min-height: 36px; padding: 4px 10px; }
+.dock .lang { display: none; }
+.prog { font: 500 .95rem var(--sans); font-variant-numeric: tabular-nums; }
+.meter { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; flex: 1 1 60px; min-width: 40px; }
+.meter i { display: block; height: 100%; background: var(--accent); }
+textarea { width: 100%; min-height: 150px; font: 500 .8rem/1.5 var(--mono); border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--bg); color: var(--ink); word-break: break-all; }
+.hint { color: var(--warn); font-size: .86rem; }
+.dock-bar .hint { font-size: .78rem; min-height: 1.2em; line-height: 1.2; }
+footer { color: var(--muted); font-size: .8rem; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+
+/* Phone (body.mobile, width <= 760 px): one clip at a time, like short videos; swipe up / down on the clip
+   or tap a letter on its right edge to change clip, and the view buttons on its left edge. No toolbar,
+   no "control all four" (one clip on screen), no arrow keys. fit() makes the page exactly one screen tall. */
+.pager, .vstrip { position: absolute; top: 50%; transform: translateY(-50%); display: none; flex-direction: column; gap: 6px; z-index: 2; }
+.pager { right: 8px; }
+.vstrip { left: 8px; }
+.pager button, .vstrip button { width: 34px; min-height: 30px; padding: 0; font: 500 .9rem var(--mono); background: #ffffffd0; color: #1b2330; border-color: #0000001a; }
+.vstrip button { font: 500 .8rem var(--sans); width: auto; min-width: 38px; padding: 0 6px; }
+.pager button[aria-current=true], .vstrip button[aria-pressed=true] { background: #1b2330; color: #fff; }
+.pager button.ranked { box-shadow: inset 0 -3px 0 var(--accent); }
+.pager button.bad { box-shadow: inset 0 -3px 0 var(--warn); }
+body.mobile .wrap { padding-top: 8px; gap: 8px; padding-inline: 10px; }
+body.mobile #task { gap: 6px !important; }
+body.mobile #task .cards { grid-template-columns: minmax(0, 1fr) !important; }
+body.mobile .top .toolbar { display: none; }
+body.mobile #task .instr-panel { padding: 8px 12px; }
+body.mobile .instr { font-size: .98rem; line-height: 1.5; }
+body.mobile .card:not(.current) { display: none; }
+body.mobile .card { justify-self: center; }
+body.mobile .card .stage { touch-action: none; }
+body.mobile .card .player { flex-wrap: nowrap; gap: 6px; }
+body.mobile .card.narrow .clock { display: none; }
+body.mobile .card .player { padding: 4px 8px; }
+body.mobile .pager, body.mobile .vstrip { display: flex; }
+body.mobile .dock { padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px)); }
+body.mobile .dock-in { flex-direction: column; gap: 6px; }
+body.mobile .zones { gap: 6px; }
+body.mobile .zone { min-width: 58px; min-height: 52px; padding: 3px 5px; }
+body.mobile .zone-head { font-size: .7rem; }
+body.mobile .zone-head span + span, body.mobile .zone.broken .zone-head .long { display: none; }
+body.mobile .chips { gap: 4px; min-height: 32px; }
+body.mobile .chip { width: 32px; height: 32px; font-size: .95rem; }
+body.mobile .caret { height: 30px; }
+body.mobile .dock-bar { width: auto; flex-direction: row; align-items: center; gap: 6px; }
+body.mobile .bar-top, body.mobile .bar-btns { display: contents; }
+body.mobile #prev { order: 0; } body.mobile #prog { order: 1; } body.mobile .meter { order: 2; min-width: 20px; }
+body.mobile .dock .lang { display: block; order: 3; } body.mobile #next { order: 4; }
+body.mobile .dock-bar button { min-height: 34px; padding: 4px 10px; white-space: nowrap; flex: none; }
+body.mobile .prog { font-size: .8rem; white-space: nowrap; }
+body.mobile .dock-bar .hint, body.mobile #who-bar { display: none; }
+</style>
+
+<div class="wrap">
+  <header class="row" style="justify-content: space-between">
+    <h1 data-t="title"></h1>
+    <div class="row"><span class="muted small" id="who"></span><button class="lang" type="button"></button></div>
+  </header>
+
+  <section class="panel" id="intro">
+    <h2 data-t="introHead"></h2>
+    <p data-t="introText"></p>
+    <ol class="steps" data-t="steps"></ol>
+    <p class="muted small" data-t="introNote"></p>
+    <div class="row">
+      <input type="text" id="name" data-t-ph="name" maxlength="24" autocomplete="off">
+      <button class="primary" id="start"></button>
+    </div>
+    <div class="hint" id="intro-hint"></div>
+  </section>
+
+  <section id="task" hidden style="display: flex; flex-direction: column; gap: 14px">
+    <div class="top">
+      <div class="panel instr-panel"><div class="instr" id="instr"></div></div>
+      <div class="row toolbar">
+        <div class="seg" role="group">
+          <button data-view="0" aria-pressed="true" data-t="front"></button><button data-view="1" data-t="side"></button><button data-view="2" data-t="close"></button>
+        </div>
+        <button id="reset" type="button" data-t="reset"></button>
+        <button class="lang" type="button"></button>
+      </div>
+    </div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section class="panel" id="done" hidden>
+    <h2 data-t="doneHead"></h2>
+    <p data-t="doneText"></p>
+    <textarea id="code" readonly></textarea>
+    <div class="row">
+      <button class="primary" id="copy" data-t="copy"></button>
+      <button id="review" data-t="review"></button>
+      <span class="small" id="copied"></span>
+    </div>
+  </section>
+
+  <footer data-t="footer"></footer>
+</div>
+
+<div class="dock" id="dock" hidden>
+  <div class="dock-in cols">
+    <div class="zones">
+      <div class="zone tray" data-zone="tray"><div class="zone-head"><span data-t="tray"></span><span data-t="trayTip"></span></div><div class="chips" id="z-tray"></div></div>
+      <div class="zone rank" data-zone="rank"><div class="zone-head"><span data-t="rankBest"></span><span data-t="rankWorst"></span></div><div class="chips" id="z-rank"></div></div>
+      <div class="zone broken" data-zone="broken"><div class="zone-head"><span><span data-t="broken"></span><span class="long" data-t="brokenTip"></span></span></div><div class="chips" id="z-broken"></div></div>
+    </div>
+    <div class="dock-bar">
+      <div class="bar-top">
+        <span class="prog" id="prog"></span>
+        <span class="muted small" id="who-bar"></span>
+        <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+      </div>
+      <div class="bar-btns">
+        <button id="prev" data-t="prev"></button>
+        <button class="lang" type="button"></button>
+        <button class="primary" id="next" disabled>下一題</button>
+      </div>
+      <span class="hint" id="hint"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+const $ = (id) => document.getElementById(id);
+const KEY = 'hsin-label-' + (DATA ? DATA.set : 'x');
+const LETTERS = 'ABCDEFGH';
+const ICON = {
+  play: '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M5 3.5v13l11-6.5z" fill="currentColor"/></svg>',
+  pause: '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M5 3.5h3.6v13H5zM11.4 3.5H15v13h-3.6z" fill="currentColor"/></svg>',
+};
+
+// state.answers[groupId] = { order: [clip indices, best first], broken: [clip indices] }; the rest wait in the tray.
+let state = { name: '', i: 0, answers: {}, seconds: {}, lang: '' };
+try {
+  const s = JSON.parse(localStorage.getItem(KEY) || 'null');
+  if (s && s.answers) {
+    state = { lang: '', ...s };
+    for (const [k, a] of Object.entries(state.answers)) if (!a.order) delete state.answers[k];   // older page version
+  }
+} catch (e) { /* no storage: still works */ }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } };
+
+let view = '0', players = [], shownAt = 0;
+let cur = 0;                                     // phone: the clip on screen
+const mq = window.matchMedia('(max-width: 760px)');
+const isMobile = () => mq.matches;
+
+function answer(g) {
+  if (!state.answers[g.id]) state.answers[g.id] = { order: [], broken: [] };
+  return state.answers[g.id];
+}
+const placed = (a) => a.order.length + a.broken.length;
+const complete = (g) => { const a = state.answers[g.id]; return !!a && placed(a) === g.vids.length; };
+const fmt = (t) => (Number.isFinite(t) ? t : 0).toFixed(1);
+
+// ---------- players ----------
+function applyView() {
+  players.forEach((p) => { p.v.style.transform = `translateX(${-Number(view) * 100 / 3}%)`; });
+  document.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
+  fit();
+}
+// Size the clips to the space left between the instruction and the dock, so a group needs no scrolling.
+// Computer: four columns as wide as fits; phone: the one clip on screen.
+function fit() {
+  const cards = $('cards');
+  if ($('task').hidden || !cards.children.length) return;
+  const mob = isMobile(), card = cards.children[mob ? cur : 0];
+  cards.style.gridTemplateColumns = '';
+  cards.querySelectorAll('.card').forEach((c) => { c.style.width = ''; });
+  const bar = card.querySelector('.player').offsetHeight;
+  const top = cards.getBoundingClientRect().top + window.scrollY;
+  const h = Math.max(160, window.innerHeight - $('dock').offsetHeight - top - bar - (mob ? 12 : 14));
+  if (mob) {
+    const w = Math.floor(Math.min(cards.clientWidth, h * 5 / 6));
+    card.style.width = `${w}px`; card.classList.toggle('narrow', w < 300);    // narrow: drop the clock, keep the timeline usable
+    return;
+  }
+  const col = (cards.clientWidth - 3 * 12) / 4;
+  cards.style.gridTemplateColumns = `repeat(4, ${Math.floor(Math.min(col, h * 5 / 6))}px)`;
+}
+function toggle(k) {
+  const play = players[k].v.paused || players[k].v.ended;
+  const p = players[k];
+  if (!play) { p.v.pause(); return; }
+  if (p.v.ended) p.v.currentTime = 0;
+  p.v.play().catch(() => {});
+}
+function spaceKey(e) {           // space: if anything plays, pause all; otherwise play all
+  if (e.code !== 'Space' && e.key !== ' ') return;
+  if ($('task').hidden || e.target.closest('input[type=text], textarea, select')) return;
+  e.preventDefault();            // no page scroll, and no click on a focused button
+  const anyOn = players.some((p) => !p.v.paused && !p.v.ended);
+  players.forEach((p) => { if (anyOn) { p.v.pause(); return; } if (p.v.ended) p.v.currentTime = 0; p.v.play().catch(() => {}); });
+}
+function arrowKey(e) {          // left / right: step STEP_S on every clip (computer only)
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if (isMobile() || $('task').hidden || e.target.closest('input, textarea, select')) return;
+  e.preventDefault();
+  const step = e.key === 'ArrowLeft' ? -STEP_S : STEP_S;
+  players.forEach((p) => {
+    p.v.currentTime = Math.max(0, Math.min((p.v.duration || 0) - 0.01, p.v.currentTime + step));
+  });
+}
+const STEP_S = 1;
+
+function seek(k, t) { const p = players[k]; p.v.currentTime = Math.min(t, p.v.duration || t); }
+function setRate(k, r) { players[k].v.playbackRate = r; }
+function resetAll() {            // every clip back to 0 s, so the four line up again; playing ones keep playing
+  const anyOn = players.some((p) => !p.v.paused && !p.v.ended);
+  players.forEach((p) => { p.v.currentTime = 0; if (anyOn) p.v.play().catch(() => {}); else p.v.pause(); });
+}
+function tick() {                // keep buttons, timelines and clocks in step with the videos
+  players.forEach((p) => {
+    const d = p.v.duration || 0, on = !p.v.paused && !p.v.ended;
+    if (p.on !== on) { p.on = on; p.btn.innerHTML = on ? ICON.pause : ICON.play; p.btn.setAttribute('aria-label', `${p.name} ${t(on ? 'pause' : 'play')}`); p.btn.title = t(on ? 'pause' : 'play'); }
+    if (p.seek.max !== String(d)) p.seek.max = String(d);
+    if (!p.dragging) p.seek.value = String(p.v.currentTime);
+    p.clock.textContent = `${fmt(p.v.currentTime)} / ${fmt(d)}`;
+  });
+  requestAnimationFrame(tick);
+}
+// Load the whole clip into memory first, so the timeline works even if the host cannot serve byte
+// ranges; if that is refused, fall back to the plain URL.
+let blobUrls = [];
+function loadClip(v, url) {
+  const direct = () => { if (v.dataset.direct) return; v.dataset.direct = '1'; v.src = url; };
+  v.addEventListener('error', direct, { once: true });
+  fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+    .then((b) => { const u = URL.createObjectURL(b); blobUrls.push(u); v.src = u; })
+    .catch(direct);
+}
+
+// ---------- phone: one clip at a time ----------
+function showClip(k) {
+  const n = players.length;
+  if (!n) return;
+  k = Math.max(0, Math.min(n - 1, k));
+  const wasPlaying = players[cur] && !players[cur].v.paused && !players[cur].v.ended;
+  if (isMobile() && k !== cur) {               // like short videos: the new clip takes over playback
+    players.forEach((p) => p.v.pause());
+    if (wasPlaying) { players[k].v.currentTime = 0; players[k].v.play().catch(() => {}); }
+  }
+  cur = k;
+  document.querySelectorAll('#cards .card').forEach((c, j) => c.classList.toggle('current', j === k));
+  document.querySelectorAll('.pager button').forEach((b) => b.setAttribute('aria-current', String(Number(b.dataset.k) === k)));
+  fit();
+}
+function addSwipe(stage) {                       // vertical swipe on the clip (phone layout only)
+  let y0 = null, x0 = 0;
+  stage.addEventListener('pointerdown', (e) => { if (isMobile()) { y0 = e.clientY; x0 = e.clientX; } });
+  stage.addEventListener('pointerup', (e) => {
+    if (y0 == null) return;
+    const dy = e.clientY - y0, dx = e.clientX - x0; y0 = null;
+    if (Math.abs(dy) > 40 && Math.abs(dy) > Math.abs(dx)) { stage.dataset.swiped = '1'; showClip(cur + (dy < 0 ? 1 : -1)); }
+  });
+  stage.addEventListener('pointercancel', () => { y0 = null; });
+}
+function applyMobile() {
+  document.body.classList.toggle('mobile', isMobile());
+  applyView();
+  showClip(cur);
+  if (!$('dock').hidden) paint();
+}
+
+// ---------- ranking dock ----------
+function move(k, zone, index) {  // put clip k into zone ('tray' | 'rank' | 'broken'); index = position within "rank"
+  const a = answer(DATA.groups[state.i]);
+  a.order = a.order.filter((x) => x !== k);
+  a.broken = a.broken.filter((x) => x !== k);
+  if (zone === 'rank') a.order.splice(index == null ? a.order.length : index, 0, k);
+  else if (zone === 'broken') a.broken.push(k);
+  save(); paint();
+}
+function chip(k, n) {
+  const c = document.createElement('div'); c.className = 'chip'; c.dataset.k = k; c.id = `chip-${LETTERS[k]}`;
+  c.tabIndex = 0; c.textContent = LETTERS[k]; c.setAttribute('role', 'button');
+  if (n) { const b = document.createElement('span'); b.className = 'n'; b.textContent = n; c.append(b); }
+  c.addEventListener('pointerdown', startDrag);
+  c.addEventListener('keydown', (e) => { if (e.key === 'Enter') tapChip(k); });
+  return c;
+}
+function tapChip(k) {            // a tap on a waiting letter sends it to the end of the ranking
+  const a = answer(DATA.groups[state.i]);
+  if (!a.order.includes(k) && !a.broken.includes(k)) move(k, 'rank');
+}
+function rankIndexAt(x) {        // where in the ranking a drop at screen x lands
+  const chips = [...$('z-rank').querySelectorAll('.chip:not(.ghost)')];
+  let i = 0;
+  for (const c of chips) { const r = c.getBoundingClientRect(); if (x > r.left + r.width / 2) i++; }
+  return i;
+}
+let drag = null;
+function startDrag(e) {
+  const src = e.currentTarget, r = src.getBoundingClientRect();
+  drag = { k: Number(src.dataset.k), src, x0: e.clientX, y0: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, moved: false, el: null };
+  src.setPointerCapture(e.pointerId);
+  src.addEventListener('pointermove', onDrag);
+  src.addEventListener('pointerup', endDrag, { once: true });
+  src.addEventListener('pointercancel', endDrag, { once: true });
+}
+function zoneAt(x, y) { const el = document.elementFromPoint(x, y); return el && el.closest('.zone'); }
+function onDrag(e) {
+  if (!drag) return;
+  if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return;
+  if (!drag.moved) {
+    drag.moved = true;
+    drag.el = drag.src.cloneNode(true); drag.el.classList.add('dragging'); document.body.append(drag.el);
+    drag.src.classList.add('ghost');
+  }
+  drag.el.style.left = `${e.clientX - drag.dx}px`; drag.el.style.top = `${e.clientY - drag.dy}px`;
+  document.querySelectorAll('.zone').forEach((z) => z.classList.remove('over'));
+  const z = zoneAt(e.clientX, e.clientY); if (z) z.classList.add('over');
+  $('z-rank').querySelectorAll('.caret').forEach((c) => c.remove());
+  if (z && z.dataset.zone === 'rank') {      // show where the letter will land
+    const chips = [...$('z-rank').querySelectorAll('.chip:not(.ghost)')], i = rankIndexAt(e.clientX);
+    const caret = document.createElement('div'); caret.className = 'caret';
+    if (i < chips.length) $('z-rank').insertBefore(caret, chips[i]); else $('z-rank').append(caret);
+  }
+}
+function endDrag(e) {
+  if (!drag) return;
+  const d = drag; drag = null;
+  d.src.removeEventListener('pointermove', onDrag);
+  document.querySelectorAll('.zone').forEach((z) => z.classList.remove('over'));
+  if (!d.moved) { tapChip(d.k); return; }
+  d.el.remove();
+  const z = e.type === 'pointerup' ? zoneAt(e.clientX, e.clientY) : null;
+  if (z) move(d.k, z.dataset.zone, z.dataset.zone === 'rank' ? rankIndexAt(e.clientX) : null);
+  else paint();
+}
+
+function paint() {
+  const g = DATA.groups[state.i], a = answer(g), total = DATA.groups.length, n = g.vids.length;
+  $('z-tray').textContent = ''; $('z-rank').textContent = ''; $('z-broken').textContent = '';
+  for (let k = 0; k < n; k++) if (!a.order.includes(k) && !a.broken.includes(k)) $('z-tray').append(chip(k));
+  a.order.forEach((k, i) => $('z-rank').append(chip(k, i + 1)));
+  a.broken.forEach((k) => $('z-broken').append(chip(k)));
+  document.querySelectorAll('.pager').forEach((pg) => pg.querySelectorAll('button').forEach((b) => {
+    const j = Number(b.dataset.k); b.classList.toggle('ranked', a.order.includes(j)); b.classList.toggle('bad', a.broken.includes(j));
+  }));
+  document.querySelectorAll('#cards .card').forEach((card, k) => {   // the same result shown on each clip
+    const st = card.querySelector('.status'), r = a.order.indexOf(k), bad = a.broken.includes(k);
+    card.classList.toggle('is-broken', bad);
+    st.hidden = r < 0 && !bad; st.className = bad ? 'status bad' : 'status';
+    st.textContent = bad ? t('brokenTag') : t('place', r + 1);
+  });
+  const done = DATA.groups.filter(complete).length;
+  $('prog').textContent = t(isMobile() ? 'progShort' : 'prog', state.i + 1, total, done);
+  $('meter').style.width = `${100 * done / total}%`;
+  $('prev').disabled = state.i === 0;
+  $('next').disabled = !complete(g);
+  $('next').textContent = t(state.i === total - 1 ? 'finish' : 'next');
+  $('hint').textContent = complete(g) ? '' : t('left', n - placed(a));
+  document.documentElement.style.setProperty('--dock-h', `${$('dock').offsetHeight + (isMobile() ? 8 : 12)}px`);
+  fit();
+}
+
+// ---------- language: the viewer's own (Chinese if the browser is Chinese), with a switch ----------
+// Every text on the page comes from T: elements with data-t get T[lang][key] as HTML; functions take arguments.
+const T = {
+  zh: {
+    title: 'HSIN 動作排名',
+    introHead: '這是在做什麼',
+    introText: '我們在訓練一個會做動作的桌面虛擬角色。每一題有一句指令和幾段角色照著做的影片，請你排出哪一段做得最好。你的排名會用來檢查 AI 評審準不準。',
+    steps: `<li>看完每一段影片。每段有自己的播放器，按 ▶ 或點影片開始，可以各自暫停、拖時間軸、調速度，會自動重播。</li>
+      <li>先挑出<b>動作本身壞掉</b>的（抖動、手穿過身體、突然卡住、關節扭成不可能的角度）：把它的字母拖到畫面底部的「壞掉的」。壞掉的一律算最後，彼此不用排。</li>
+      <li>其餘的拖到「排名」裡，<b>左邊最好</b>。排名看兩件事：<b>有沒有照指令做</b>，以及<b>動作自不自然</b>。兩者衝突時，沒照指令做的排後面。</li>
+      <li>不想拖曳的話，點一下「待排」裡的字母，它會排到排名的最後面。</li>
+      <li><b>電腦</b>：四段並排。空白鍵播放或暫停全部，「重設」讓四段都回到開頭重新對齊，左右方向鍵前後跳 1 秒；上方可以切換正面、側面、特寫。</li>
+      <li><b>手機</b>：一次顯示一段。在影片上往上滑看下一段、往下滑看上一段，或點影片右側的字母；影片左側的按鈕切換正面、側面、特寫。</li>
+      <li>角色不會動臉和嘴巴，也沒有聲音，身邊也沒有桌子或其他物品。指令裡提到表情、說話或道具的部分，看動作本身有沒有做到就好。</li>`,
+    introNote: (n) => `共 ${n} 題，大約 20 到 30 分鐘。進度存在這個瀏覽器裡，中途關掉再用同一個瀏覽器打開可以接著做。沒有標準答案，照你的直覺排就好。`,
+    name: '你的暱稱（讓出題的人知道是誰）', start: '開始', resume: '接著做',
+    needName: '請先填一個暱稱。', template: '這是範本頁，還沒有放入題目。',
+    front: '正面', side: '側面', close: '特寫', frontShort: '正', sideShort: '側', closeShort: '特',
+    reset: '重設', play: '播放', pause: '暫停', timeline: '時間軸', speed: '播放速度',
+    tray: '待排', trayTip: '點一下 = 排到最後', rankBest: '排名：最好 ←', rankWorst: '→ 最差',
+    broken: '壞掉的', brokenTip: '（算最後，不用排）', brokenTag: '壞掉', place: (r) => `第 ${r} 名`,
+    prev: '上一題', next: '下一題', finish: '完成',
+    prog: (i, n, d) => `第 ${i} / ${n} 題 · 已完成 ${d}`, progShort: (i, n, d) => `${i} / ${n} · 完成 ${d}`,
+    left: (k) => `還有 ${k} 段沒放進「排名」或「壞掉的」`,
+    doneHead: '完成了，謝謝你',
+    doneText: '最後一步：把下面這段文字整段複製，傳給請你幫忙的人。這段文字就是你的答案，沒有包含任何個人資料。',
+    copy: '複製', review: '回去修改', copied: '已複製。', copyFail: '已選取全部文字，請按 Ctrl+C（手機請長按）複製。',
+    footer: '角色模型：VRM1 Constraint Twist Sample，© 2022 pixiv Inc.，VRM Public License 1.0。',
+    other: 'English',
+  },
+  en: {
+    title: 'HSIN Motion Ranking',
+    introHead: 'What this is',
+    introText: 'We are training a desktop virtual character that moves. Each task has one instruction and a few videos of the character following it; please rank which one does it best. Your rankings are used to check how accurate an AI judge is.',
+    steps: `<li>Watch every clip. Each clip has its own player: press ▶ or tap the clip to start; you can pause, drag the timeline and change the speed separately. Clips loop.</li>
+      <li>First pick out the clips where <b>the motion itself is broken</b> (jitter, a hand passing through the body, a sudden freeze, a joint bent in an impossible way): drag their letters to "Broken" at the bottom. Broken clips all count as last and are not ranked among themselves.</li>
+      <li>Drag the rest into "Ranking", <b>best on the left</b>. Rank by two things: <b>does it follow the instruction</b>, and <b>does it look natural</b>. When they conflict, a clip that does not follow the instruction goes lower.</li>
+      <li>If you prefer not to drag, tap a letter under "Waiting" and it goes to the end of the ranking.</li>
+      <li><b>Computer</b>: the four clips side by side. The space bar plays or pauses all four; "Reset" sends all four back to the start so they line up again; the left / right arrow keys jump 1&nbsp;s back / forward; the buttons at the top switch between front, side and close-up views.</li>
+      <li><b>Phone</b>: one clip at a time. Swipe up on the clip for the next one, down for the previous one, or tap the letters on its right edge; the buttons on its left edge switch between front, side and close-up.</li>
+      <li>The character does not move its face or mouth, makes no sound, and has no desk or other objects around it. Where an instruction mentions a facial expression, speech or an object, judge only whether the body movement is there.</li>`,
+    introNote: (n) => `${n} tasks, about 20 to 30 minutes. Your progress is saved in this browser: close the page and open it again in the same browser to continue. There are no right answers; go with your instinct.`,
+    name: 'Your nickname', start: 'Start', resume: 'Continue',
+    needName: 'Please enter a nickname first.', template: 'This is the template page; it has no tasks yet.',
+    front: 'Front', side: 'Side', close: 'Close-up', frontShort: 'Front', sideShort: 'Side', closeShort: 'Close',
+    reset: 'Reset', play: 'play', pause: 'pause', timeline: 'timeline', speed: 'speed',
+    tray: 'Waiting', trayTip: 'tap = add to end', rankBest: 'Ranking: best ←', rankWorst: '→ worst',
+    broken: 'Broken', brokenTip: ' (all last, not ranked)', brokenTag: 'Broken', place: (r) => `#${r}`,
+    prev: 'Previous', next: 'Next', finish: 'Finish',
+    prog: (i, n, d) => `Task ${i} / ${n} · ${d} done`, progShort: (i, n, d) => `${i} / ${n} · ${d} done`,
+    left: (k) => `${k} clip${k > 1 ? 's' : ''} not yet in "Ranking" or "Broken"`,
+    doneHead: 'Done, thank you!',
+    doneText: 'One last step: copy all of the text below and send it to the person who asked you to help. This text is your answer; it contains no personal data.',
+    copy: 'Copy', review: 'Go back and edit', copied: 'Copied.', copyFail: 'All the text is selected; press Ctrl+C (on a phone, long-press) to copy it.',
+    footer: 'Character model: VRM1 Constraint Twist Sample, © 2022 pixiv Inc., VRM Public License 1.0.',
+    other: '中文',
+  },
+};
+const lang = () => state.lang || (/^zh/i.test(navigator.language || '') ? 'zh' : 'en');
+function t(key, ...args) { const v = T[lang()][key]; return typeof v === 'function' ? v(...args) : v; }
+function applyLang() {
+  document.documentElement.lang = lang() === 'zh' ? 'zh-Hant' : 'en';
+  document.title = t('title');
+  document.querySelectorAll('[data-t]').forEach((e) => { e.innerHTML = t(e.dataset.t, DATA ? DATA.groups.length : 0); });
+  document.querySelectorAll('[data-t-ph]').forEach((e) => { e.placeholder = t(e.dataset.tPh); });
+  document.querySelectorAll('.lang').forEach((b) => { b.textContent = t('other'); });
+  $('start').textContent = t(Object.keys(state.answers).length ? 'resume' : 'start');
+  if (!$('task').hidden) {
+    showInstruction(); paint();
+    players.forEach((p, k) => { p.on = null; p.seek.setAttribute('aria-label', `${LETTERS[k]} ${t('timeline')}`); p.rate.setAttribute('aria-label', `${LETTERS[k]} ${t('speed')}`); });
+  }
+  if (!$('done').hidden) $('copied').textContent = '';
+}
+function showInstruction() {
+  const g = DATA.groups[state.i], zh = lang() === 'zh' && g.zh;
+  $('instr').textContent = zh ? g.zh : g.text;
+}
+
+// ---------- groups ----------
+function leaveGroup() {
+  const g = DATA.groups[state.i];
+  if (g && shownAt) state.seconds[g.id] = Math.round((state.seconds[g.id] || 0) + (Date.now() - shownAt) / 1000);
+  shownAt = 0;
+}
+function show(i) {
+  leaveGroup();
+  state.i = i; save();
+  const g = DATA.groups[i];
+  showInstruction();
+  const cards = $('cards');
+  cards.textContent = '';
+  players = [];
+  blobUrls.forEach((u) => URL.revokeObjectURL(u)); blobUrls = [];
+  g.vids.forEach((name, k) => {
+    const card = document.createElement('div'); card.className = 'card';
+    const stage = document.createElement('div'); stage.className = 'stage';
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'auto'; v.loop = true;     // starts paused: read the instruction first
+    loadClip(v, `v/${name}.mp4`);
+    const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = LETTERS[k];
+    const st = document.createElement('span'); st.className = 'status'; st.hidden = true;
+    const pager = document.createElement('div'); pager.className = 'pager';
+    g.vids.forEach((_, j) => {
+      const b = document.createElement('button'); b.textContent = LETTERS[j]; b.dataset.k = j;
+      b.setAttribute('aria-label', LETTERS[j]);
+      b.onclick = (e) => { e.stopPropagation(); showClip(j); };
+      pager.append(b);
+    });
+    const vstrip = document.createElement('div'); vstrip.className = 'vstrip';     // phone: views on the clip
+    ['front', 'side', 'close'].forEach((key, j) => {
+      const b = document.createElement('button'); b.dataset.view = String(j); b.dataset.t = key + 'Short';
+      b.textContent = t(key + 'Short'); b.setAttribute('aria-label', t(key));
+      b.onclick = (e) => { e.stopPropagation(); view = String(j); applyView(); };
+      vstrip.append(b);
+    });
+    stage.append(v, tag, st, pager, vstrip);
+    stage.onclick = () => { if (stage.dataset.swiped) { delete stage.dataset.swiped; return; } toggle(k); };
+    addSwipe(stage);
+
+    const bar = document.createElement('div'); bar.className = 'player';
+    const btn = document.createElement('button'); btn.className = 'pp'; btn.id = `play-${k}`; btn.onclick = () => toggle(k);
+    const sk = document.createElement('input'); sk.type = 'range'; sk.id = `seek-${k}`; sk.min = '0'; sk.max = '1'; sk.step = '0.01'; sk.value = '0';
+    sk.setAttribute('aria-label', `${LETTERS[k]} ${t('timeline')}`);
+    const clock = document.createElement('span'); clock.className = 'clock';
+    const rate = document.createElement('select'); rate.id = `rate-${k}`; rate.setAttribute('aria-label', `${LETTERS[k]} ${t('speed')}`);
+    for (const r of [0.25, 0.5, 1, 2]) { const o = document.createElement('option'); o.value = String(r); o.textContent = `${r}×`; rate.append(o); }
+    rate.value = '1';
+    const p = { v, btn, seek: sk, clock, rate, name: LETTERS[k], on: null, dragging: false };
+    sk.addEventListener('input', () => { p.dragging = true; seek(k, Number(sk.value)); });
+    sk.addEventListener('change', () => { p.dragging = false; });
+    rate.onchange = () => setRate(k, Number(rate.value));
+    bar.append(btn, sk, clock, rate); players.push(p);
+    card.append(stage, bar); cards.append(card);
+  });
+  cur = 0;
+  applyView(); paint(); showClip(0);
+  shownAt = Date.now();
+  window.scrollTo(0, 0);
+}
+
+function code() {
+  // per group, in page order: rank of each clip (1 = best) and 0 for broken ones; broken = 1 / 0
+  const out = { v: 2, set: DATA.set, name: state.name, answers: {}, seconds: state.seconds };
+  for (const g of DATA.groups) if (complete(g)) {
+    const a = state.answers[g.id];
+    out.answers[g.id] = { rank: g.vids.map((_, k) => a.order.indexOf(k) + 1), broken: g.vids.map((_, k) => Number(a.broken.includes(k))) };
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(out));
+  let bin = ''; bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return 'HSIN1.' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function finish() {
+  leaveGroup(); save();
+  players.forEach((p) => p.v.pause());
+  $('task').hidden = true; $('dock').hidden = true; $('done').hidden = false; document.body.classList.remove('tasking');
+  $('code').value = code();
+  window.scrollTo(0, 0);
+}
+function begin() {
+  $('intro').hidden = true; $('done').hidden = true; $('task').hidden = false; $('dock').hidden = false; document.body.classList.add('tasking');
+  $('who').textContent = state.name; $('who-bar').textContent = state.name;
+  show(Math.min(state.i, DATA.groups.length - 1));           // resume where this browser left off
+}
+
+applyLang();
+if (!DATA) {
+  $('intro-hint').textContent = t('template');
+  $('start').disabled = true;
+} else {
+  $('name').value = state.name || '';
+  $('start').onclick = () => {
+    const name = $('name').value.trim();
+    if (!name) { $('intro-hint').textContent = t('needName'); $('name').focus(); return; }
+    state.name = name; save(); begin();
+  };
+  $('name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('start').click(); });
+  document.querySelectorAll('[data-view]').forEach((b) => { b.onclick = () => { view = b.dataset.view; applyView(); }; });
+  $('reset').onclick = resetAll;
+  document.addEventListener('keydown', spaceKey);
+  document.addEventListener('keydown', arrowKey);
+  document.querySelectorAll('.lang').forEach((b) => { b.onclick = () => { state.lang = lang() === 'zh' ? 'en' : 'zh'; save(); applyLang(); }; });
+  $('prev').onclick = () => { if (state.i > 0) show(state.i - 1); };
+  $('next').onclick = () => { if (state.i < DATA.groups.length - 1) show(state.i + 1); else finish(); };
+  $('review').onclick = () => { $('done').hidden = true; begin(); };
+  $('copy').onclick = async () => {
+    const box = $('code'); box.focus(); box.select();
+    try { await navigator.clipboard.writeText(box.value); $('copied').textContent = t('copied'); }
+    catch (e) { $('copied').textContent = t('copyFail'); }
+  };
+  window.addEventListener('pagehide', () => { leaveGroup(); save(); });
+  window.addEventListener('resize', () => { if (!$('dock').hidden) paint(); });
+  document.fonts.ready.then(fit);
+  mq.addEventListener('change', applyMobile);
+  applyMobile();
+  requestAnimationFrame(tick);
+}
+</script>

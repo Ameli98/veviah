@@ -1,0 +1,1991 @@
+{
+ "_doc": "The default personality set (2026-11-08, the author's sets decision): idle actions (from idle.json: Idle actions of the desktop companion (2026-11-04, spec in CLAUDE.md): small things the avatar does every 20-60 s while nobody talks to it. Model-free keyframes (the perform format); 'sit' actions are solved for whichever floor posture the avatar is in. Each starts and ends in the posture's rest pose. Written by Claude, no dataset. hands_behind (palms together behind the back) removed 2026-11-05 (the author: odd as an idle action).) and touch reactions (from touch.json: Touch reactions (2026-11-06, grilling with the author Q5-Q7): clicking a body part in the companion window plays one of these, solved for the model and posture like idle.json (companion /touch?posture=&turn=). 'stand' is used when standing, 'sit' for every floor posture. Each has the emotion the face shows. Sided ones (_r / _l) are the character's own right / left. shy_cover answers the chest, shy_skirt the skirt / front of the hips, shy_bottom the bottom (sitting: shy_skirt). Versions of one reaction are named <name>~2, <name>~3 and play in turn on repeated clicks (the author, 2026-11-08: no escalation, no angry face from repeated clicks). A reaction that fails the rule filter for a model / posture is dropped at solve time; the page then falls back along TOUCH_FALLBACK.). Format: sets/<name>.json = {title: {zh, en, ja}, idle: {stand: [...], sit: [...]}, touch: {stand: [...], sit: [...]}}; an entry is {name, emotion, keyframes[, interp]} or {name, use: '<name>' | '<set>:<name>'} (the same motion under another item's name, e.g. shy shoulder = chest). The companion (companion.mjs /idle, /touch ?set=) solves a set's entries per model / posture / facing; the page falls back to this set for an item the chosen set lacks (or the filter dropped), and <name>~2 / ~3 are versions played in turn.",
+ "title": {
+  "zh": "預設",
+  "en": "Default",
+  "ja": "デフォルト"
+ },
+ "idle": {
+  "stand": [
+   {
+    "name": "look_around",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.9,
+      "head": {
+       "turn": 35,
+       "nod": -3
+      }
+     },
+     {
+      "t": 1.9,
+      "head": {
+       "turn": 35,
+       "nod": -3
+      }
+     },
+     {
+      "t": 2.9,
+      "head": {
+       "turn": -30,
+       "nod": 2
+      }
+     },
+     {
+      "t": 3.8,
+      "head": {
+       "turn": -30,
+       "nod": 2
+      }
+     },
+     {
+      "t": 4.8,
+      "head": {
+       "turn": 0,
+       "nod": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "weight_shift",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 1.2,
+      "legs": {
+       "weight": "left",
+       "hip": 5,
+       "right_foot": {
+        "lift": "heel"
+       }
+      },
+      "head": {
+       "tilt": -4
+      }
+     },
+     {
+      "t": 3.2,
+      "legs": {
+       "weight": "left",
+       "hip": 5,
+       "right_foot": {
+        "lift": "heel"
+       }
+      },
+      "head": {
+       "tilt": -4
+      }
+     },
+     {
+      "t": 4.4,
+      "legs": {
+       "weight": "center",
+       "hip": "level",
+       "right_foot": {
+        "lift": "down"
+       }
+      },
+      "head": {
+       "tilt": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "cheek_touch",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.9,
+      "right_arm": {
+       "touch": "cheek",
+       "with": "fingers"
+      },
+      "head": {
+       "tilt": -8,
+       "nod": 3
+      }
+     },
+     {
+      "t": 2.2,
+      "right_arm": {
+       "touch": "cheek",
+       "with": "fingers"
+      },
+      "head": {
+       "tilt": -8,
+       "nod": 3
+      }
+     },
+     {
+      "t": 3.1,
+      "right_arm": "rest",
+      "head": {
+       "tilt": 0,
+       "nod": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "small_stretch",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 1.2,
+      "hands_meet": {
+       "at": "above_head far",
+       "how": "palms"
+      },
+      "torso": {
+       "lean": -5
+      },
+      "head": {
+       "nod": -10
+      }
+     },
+     {
+      "t": 2.2,
+      "hands_meet": {
+       "at": "above_head far",
+       "how": "palms"
+      },
+      "torso": {
+       "lean": -7
+      },
+      "head": {
+       "nod": -12
+      }
+     },
+     {
+      "t": 3.4,
+      "right_arm": "rest",
+      "left_arm": "rest",
+      "torso": {
+       "lean": 0
+      },
+      "head": {
+       "nod": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "look_at_hand",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.9,
+      "right_arm": {
+       "hand": "chest front close",
+       "palm": "back",
+       "wrist": 20
+      },
+      "head": {
+       "nod": 15,
+       "turn": -8
+      }
+     },
+     {
+      "t": 2.2,
+      "right_arm": {
+       "hand": "chest front close",
+       "palm": "back",
+       "wrist": 30
+      },
+      "head": {
+       "nod": 15,
+       "turn": -8
+      }
+     },
+     {
+      "t": 3.1,
+      "right_arm": "rest",
+      "head": {
+       "nod": 0,
+       "turn": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "turn_aside",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 1.4,
+      "legs": {
+       "turn": 50
+      },
+      "head": {
+       "turn": -20
+      }
+     },
+     {
+      "t": 3.0,
+      "legs": {
+       "turn": 50
+      },
+      "head": {
+       "turn": -25,
+       "tilt": 4
+      }
+     },
+     {
+      "t": 4.4,
+      "legs": {
+       "turn": 0
+      },
+      "head": {
+       "turn": 0,
+       "tilt": 0
+      }
+     }
+    ]
+   }
+  ],
+  "sit": [
+   {
+    "name": "look_around",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.9,
+      "head": {
+       "turn": 35,
+       "nod": -3
+      }
+     },
+     {
+      "t": 1.9,
+      "head": {
+       "turn": 35,
+       "nod": -3
+      }
+     },
+     {
+      "t": 2.9,
+      "head": {
+       "turn": -30,
+       "nod": 2
+      }
+     },
+     {
+      "t": 3.8,
+      "head": {
+       "turn": -30,
+       "nod": 2
+      }
+     },
+     {
+      "t": 4.8,
+      "head": {
+       "turn": 0,
+       "nod": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "head_tilt",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 1.0,
+      "head": {
+       "tilt": 12,
+       "nod": 3
+      },
+      "torso": {
+       "bend": 4
+      }
+     },
+     {
+      "t": 2.4,
+      "head": {
+       "tilt": 12,
+       "nod": 3
+      },
+      "torso": {
+       "bend": 4
+      }
+     },
+     {
+      "t": 3.4,
+      "head": {
+       "tilt": 0,
+       "nod": 0
+      },
+      "torso": {
+       "bend": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "cheek_touch",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.9,
+      "right_arm": {
+       "touch": "cheek",
+       "with": "fingers"
+      },
+      "head": {
+       "tilt": -8,
+       "nod": 3
+      }
+     },
+     {
+      "t": 2.2,
+      "right_arm": {
+       "touch": "cheek",
+       "with": "fingers"
+      },
+      "head": {
+       "tilt": -8,
+       "nod": 3
+      }
+     },
+     {
+      "t": 3.1,
+      "right_arm": "rest",
+      "head": {
+       "tilt": 0,
+       "nod": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "stretch_forward",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 1.2,
+      "hands_meet": {
+       "at": "chest far",
+       "how": "palms"
+      },
+      "torso": {
+       "lean": 10
+      },
+      "head": {
+       "nod": 5
+      }
+     },
+     {
+      "t": 2.2,
+      "hands_meet": {
+       "at": "chest far",
+       "how": "palms"
+      },
+      "torso": {
+       "lean": 14
+      },
+      "head": {
+       "nod": 8
+      }
+     },
+     {
+      "t": 3.4,
+      "right_arm": "rest",
+      "left_arm": "rest",
+      "torso": {
+       "lean": 0
+      },
+      "head": {
+       "nod": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "lean_sway",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 1.3,
+      "torso": {
+       "bend": 6,
+       "lean": 3
+      },
+      "head": {
+       "tilt": -5
+      }
+     },
+     {
+      "t": 2.6,
+      "torso": {
+       "bend": -6,
+       "lean": 3
+      },
+      "head": {
+       "tilt": 5
+      }
+     },
+     {
+      "t": 3.8,
+      "torso": {
+       "bend": 0,
+       "lean": 0
+      },
+      "head": {
+       "tilt": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "look_down",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 1.0,
+      "head": {
+       "nod": 22,
+       "turn": 6
+      }
+     },
+     {
+      "t": 2.6,
+      "head": {
+       "nod": 22,
+       "turn": -4
+      }
+     },
+     {
+      "t": 3.6,
+      "head": {
+       "nod": 0,
+       "turn": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "turn_torso",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 1.2,
+      "torso": {
+       "turn": 25
+      },
+      "head": {
+       "turn": 15
+      }
+     },
+     {
+      "t": 2.6,
+      "torso": {
+       "turn": 25
+      },
+      "head": {
+       "turn": 10,
+       "tilt": 4
+      }
+     },
+     {
+      "t": 3.8,
+      "torso": {
+       "turn": 0
+      },
+      "head": {
+       "turn": 0,
+       "tilt": 0
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "touch": {
+  "stand": [
+   {
+    "name": "head_pat",
+    "emotion": "happy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.4,
+      "head": {
+       "nod": 12,
+       "tilt": 8
+      },
+      "shoulders": {
+       "left": 8,
+       "right": 8
+      }
+     },
+     {
+      "t": 1.6,
+      "head": {
+       "nod": 10,
+       "tilt": -6
+      },
+      "shoulders": {
+       "left": 6,
+       "right": 6
+      }
+     },
+     {
+      "t": 2.3,
+      "head": {
+       "nod": 0,
+       "tilt": 0
+      },
+      "shoulders": {
+       "left": 0,
+       "right": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "head_pat~2",
+    "emotion": "happy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.45,
+      "head": {
+       "nod": 8,
+       "tilt": -10,
+       "turn": -8
+      },
+      "torso": {
+       "bend": 0
+      },
+      "hands_meet": {
+       "lead": "left",
+       "how": "palms",
+       "elbow": "out",
+       "lead_arm": {
+        "upper": [
+         0.145,
+         -0.506,
+         0.85
+        ],
+        "fore": [
+         -0.826,
+         0.477,
+         0.3
+        ],
+        "wrist": 0
+       }
+      }
+     },
+     {
+      "t": 1.2,
+      "head": {
+       "nod": 8,
+       "tilt": -14,
+       "turn": -8
+      },
+      "torso": {
+       "bend": -4
+      },
+      "hands_meet": {
+       "lead": "left",
+       "how": "palms",
+       "elbow": "out",
+       "lead_arm": {
+        "upper": [
+         0.145,
+         -0.506,
+         0.85
+        ],
+        "fore": [
+         -0.826,
+         0.477,
+         0.3
+        ],
+        "wrist": 0
+       }
+      }
+     },
+     {
+      "t": 1.9,
+      "head": {
+       "nod": 8,
+       "tilt": -7,
+       "turn": -8
+      },
+      "torso": {
+       "bend": 2
+      },
+      "hands_meet": {
+       "lead": "left",
+       "how": "palms",
+       "elbow": "out",
+       "lead_arm": {
+        "upper": [
+         0.145,
+         -0.506,
+         0.85
+        ],
+        "fore": [
+         -0.826,
+         0.477,
+         0.3
+        ],
+        "wrist": 0
+       }
+      }
+     },
+     {
+      "t": 2.6,
+      "head": {
+       "nod": 8,
+       "tilt": -12,
+       "turn": -8
+      },
+      "torso": {
+       "bend": -3
+      },
+      "hands_meet": {
+       "lead": "left",
+       "how": "palms",
+       "elbow": "out",
+       "lead_arm": {
+        "upper": [
+         0.145,
+         -0.506,
+         0.85
+        ],
+        "fore": [
+         -0.826,
+         0.477,
+         0.3
+        ],
+        "wrist": 0
+       }
+      }
+     },
+     {
+      "t": 3.3,
+      "head": {
+       "nod": 0,
+       "tilt": 0
+      },
+      "torso": {
+       "bend": 0
+      },
+      "right_arm": "rest",
+      "left_arm": "rest",
+      "hands": {
+       "left": "relaxed",
+       "right": "relaxed"
+      }
+     }
+    ],
+    "_ref": "Grace's joined hands beside the right shoulder (2026-11-07, SOP, ~/hsin_runs/ref_touch/grace/)"
+   },
+   {
+    "name": "cheek_poke_r",
+    "emotion": "surprised",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.3,
+      "head": {
+       "turn": 8,
+       "tilt": -6
+      },
+      "right_arm": {
+       "touch": "cheek",
+       "with": "fingertips"
+      },
+      "hands": {
+       "right": "open"
+      }
+     },
+     {
+      "t": 1.4,
+      "head": {
+       "turn": 6,
+       "tilt": -9
+      },
+      "right_arm": {
+       "touch": "cheek",
+       "with": "fingertips"
+      },
+      "hands": {
+       "right": "open"
+      }
+     },
+     {
+      "t": 2.1,
+      "head": {
+       "turn": 0,
+       "tilt": 0
+      },
+      "right_arm": "rest",
+      "hands": {
+       "right": "relaxed",
+       "left": "relaxed"
+      }
+     }
+    ]
+   },
+   {
+    "name": "cheek_poke_l",
+    "emotion": "surprised",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.3,
+      "head": {
+       "turn": -8,
+       "tilt": 6
+      },
+      "left_arm": {
+       "touch": "cheek",
+       "with": "fingertips"
+      },
+      "hands": {
+       "left": "open"
+      }
+     },
+     {
+      "t": 1.4,
+      "head": {
+       "turn": -6,
+       "tilt": 9
+      },
+      "left_arm": {
+       "touch": "cheek",
+       "with": "fingertips"
+      },
+      "hands": {
+       "left": "open"
+      }
+     },
+     {
+      "t": 2.1,
+      "head": {
+       "turn": 0,
+       "tilt": 0
+      },
+      "left_arm": "rest",
+      "hands": {
+       "right": "relaxed",
+       "left": "relaxed"
+      }
+     }
+    ]
+   },
+   {
+    "name": "hand_r",
+    "emotion": "happy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.6,
+      "head": {
+       "turn": -18,
+       "nod": 8
+      },
+      "right_arm": {
+       "hand": "shoulder front close",
+       "palm": "back",
+       "wrist": 8
+      },
+      "hands": {
+       "right": "open"
+      }
+     },
+     {
+      "t": 1.8,
+      "head": {
+       "turn": -16,
+       "nod": 6,
+       "tilt": -4
+      },
+      "right_arm": {
+       "hand": "shoulder front close",
+       "palm": "back",
+       "wrist": 4
+      }
+     },
+     {
+      "t": 2.6,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": 0
+      },
+      "right_arm": "rest",
+      "hands": {
+       "right": "relaxed"
+      }
+     }
+    ]
+   },
+   {
+    "name": "hand_l",
+    "emotion": "happy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.6,
+      "head": {
+       "turn": 18,
+       "nod": 8
+      },
+      "left_arm": {
+       "hand": "shoulder front close",
+       "palm": "back",
+       "wrist": 8
+      },
+      "hands": {
+       "left": "open"
+      }
+     },
+     {
+      "t": 1.8,
+      "head": {
+       "turn": 16,
+       "nod": 6,
+       "tilt": 4
+      },
+      "left_arm": {
+       "hand": "shoulder front close",
+       "palm": "back",
+       "wrist": 4
+      }
+     },
+     {
+      "t": 2.6,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": 0
+      },
+      "left_arm": "rest",
+      "hands": {
+       "left": "relaxed"
+      }
+     }
+    ]
+   },
+   {
+    "name": "shoulder_r",
+    "emotion": "neutral",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.35,
+      "head": {
+       "turn": -28,
+       "nod": 18
+      }
+     },
+     {
+      "t": 0.9,
+      "head": {
+       "turn": -26,
+       "nod": 16
+      }
+     },
+     {
+      "t": 1.4,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": -8
+      }
+     },
+     {
+      "t": 2.2,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": -7
+      }
+     },
+     {
+      "t": 2.8,
+      "head": {
+       "tilt": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "shoulder_l",
+    "emotion": "neutral",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.35,
+      "head": {
+       "turn": 28,
+       "nod": 18
+      }
+     },
+     {
+      "t": 0.9,
+      "head": {
+       "turn": 26,
+       "nod": 16
+      }
+     },
+     {
+      "t": 1.4,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": 8
+      }
+     },
+     {
+      "t": 2.2,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": 7
+      }
+     },
+     {
+      "t": 2.8,
+      "head": {
+       "tilt": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "belly",
+    "emotion": "happy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.3,
+      "torso": {
+       "lean": 14
+      },
+      "head": {
+       "nod": 10
+      },
+      "shoulders": {
+       "left": 12,
+       "right": 12
+      },
+      "right_arm": {
+       "touch": "belly",
+       "with": "palm"
+      },
+      "left_arm": {
+       "touch": "belly",
+       "with": "palm"
+      }
+     },
+     {
+      "t": 0.8,
+      "torso": {
+       "lean": 12,
+       "bend": 5
+      }
+     },
+     {
+      "t": 1.3,
+      "torso": {
+       "lean": 12,
+       "bend": -5
+      }
+     },
+     {
+      "t": 1.8,
+      "torso": {
+       "lean": 10,
+       "bend": 0
+      },
+      "right_arm": {
+       "touch": "belly",
+       "with": "palm"
+      },
+      "left_arm": {
+       "touch": "belly",
+       "with": "palm"
+      }
+     },
+     {
+      "t": 2.6,
+      "torso": {
+       "lean": 0
+      },
+      "head": {
+       "nod": 0
+      },
+      "shoulders": {
+       "left": 0,
+       "right": 0
+      },
+      "right_arm": "rest",
+      "left_arm": "rest"
+     }
+    ]
+   },
+   {
+    "name": "legs",
+    "emotion": "neutral",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.5,
+      "head": {
+       "nod": 32
+      },
+      "torso": {
+       "lean": 6
+      }
+     },
+     {
+      "t": 1.5,
+      "head": {
+       "nod": 30,
+       "tilt": 6
+      },
+      "torso": {
+       "lean": 6
+      }
+     },
+     {
+      "t": 2.2,
+      "head": {
+       "nod": 0,
+       "tilt": 0
+      },
+      "torso": {
+       "lean": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "shy_cover",
+    "emotion": "shy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.45,
+      "torso": {
+       "lean": -6
+      },
+      "head": {
+       "nod": 12,
+       "turn": 15
+      },
+      "legs": {
+       "knees": "in",
+       "weight": "left",
+       "hip": "out",
+       "right_foot": {
+        "toes": "in"
+       }
+      },
+      "arms_cross": {
+       "how": "cover",
+       "top": "left"
+      }
+     },
+     {
+      "t": 1.8,
+      "torso": {
+       "lean": -4
+      },
+      "head": {
+       "nod": 10,
+       "turn": 18
+      },
+      "arms_cross": {
+       "how": "cover",
+       "top": "left"
+      }
+     },
+     {
+      "t": 2.8,
+      "torso": {
+       "lean": 0
+      },
+      "head": {
+       "nod": 0,
+       "turn": 0
+      },
+      "right_arm": "rest",
+      "left_arm": "rest",
+      "legs": {
+       "weight": "center",
+       "right_foot": {
+        "place": "home",
+        "lift": "down",
+        "toes": "forward"
+       },
+       "hip": "level",
+       "knees": "normal"
+      },
+      "hands": {
+       "left": "relaxed",
+       "right": "relaxed"
+      }
+     }
+    ],
+    "_ref": "ai-pose-gallery U053 (arms crossed, hands on the chest) + T021 legs (knees together), 2026-11-07"
+   },
+   {
+    "name": "shy_skirt",
+    "emotion": "shy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.4,
+      "torso": {
+       "lean": 10
+      },
+      "head": {
+       "nod": 14,
+       "turn": 10
+      },
+      "legs": {
+       "stance": "together",
+       "height": "bent"
+      },
+      "right_arm": {
+       "touch": "thigh",
+       "with": "palm"
+      },
+      "left_arm": {
+       "touch": "thigh",
+       "with": "palm"
+      }
+     },
+     {
+      "t": 1.9,
+      "torso": {
+       "lean": 8
+      },
+      "head": {
+       "nod": 12,
+       "turn": 12
+      },
+      "right_arm": {
+       "touch": "thigh",
+       "with": "palm"
+      },
+      "left_arm": {
+       "touch": "thigh",
+       "with": "palm"
+      }
+     },
+     {
+      "t": 2.8,
+      "torso": {
+       "lean": 0
+      },
+      "head": {
+       "nod": 0,
+       "turn": 0
+      },
+      "right_arm": "rest",
+      "left_arm": "rest",
+      "legs": {
+       "stance": "normal",
+       "height": "straight"
+      }
+     }
+    ]
+   },
+   {
+    "name": "shy_bottom",
+    "emotion": "shy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.5,
+      "legs": {
+       "turn": 40
+      },
+      "torso": {
+       "lean": 12
+      },
+      "head": {
+       "turn": -40,
+       "nod": -4
+      },
+      "right_arm": {
+       "hand": "hip front back",
+       "palm": "back"
+      },
+      "left_arm": {
+       "hand": "hip front back",
+       "palm": "back"
+      }
+     },
+     {
+      "t": 2.0,
+      "legs": {
+       "turn": 40
+      },
+      "torso": {
+       "lean": 10
+      },
+      "head": {
+       "turn": -38,
+       "nod": -2,
+       "tilt": -5
+      },
+      "right_arm": {
+       "hand": "hip front back",
+       "palm": "back"
+      },
+      "left_arm": {
+       "hand": "hip front back",
+       "palm": "back"
+      }
+     },
+     {
+      "t": 3.0,
+      "legs": {
+       "turn": 0
+      },
+      "torso": {
+       "lean": 0
+      },
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": 0
+      },
+      "right_arm": "rest",
+      "left_arm": "rest"
+     }
+    ]
+   }
+  ],
+  "sit": [
+   {
+    "name": "head_pat",
+    "emotion": "happy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.4,
+      "head": {
+       "nod": 12,
+       "tilt": 8
+      },
+      "shoulders": {
+       "left": 8,
+       "right": 8
+      }
+     },
+     {
+      "t": 1.6,
+      "head": {
+       "nod": 10,
+       "tilt": -6
+      },
+      "shoulders": {
+       "left": 6,
+       "right": 6
+      }
+     },
+     {
+      "t": 2.3,
+      "head": {
+       "nod": 0,
+       "tilt": 0
+      },
+      "shoulders": {
+       "left": 0,
+       "right": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "head_pat~2",
+    "emotion": "happy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.45,
+      "head": {
+       "nod": 8,
+       "tilt": -10,
+       "turn": -8
+      },
+      "torso": {
+       "bend": 0
+      },
+      "hands_meet": {
+       "lead": "left",
+       "how": "palms",
+       "elbow": "out",
+       "lead_arm": {
+        "upper": [
+         0.145,
+         -0.506,
+         0.85
+        ],
+        "fore": [
+         -0.826,
+         0.477,
+         0.3
+        ],
+        "wrist": 0
+       }
+      }
+     },
+     {
+      "t": 1.2,
+      "head": {
+       "nod": 8,
+       "tilt": -14,
+       "turn": -8
+      },
+      "torso": {
+       "bend": -4
+      },
+      "hands_meet": {
+       "lead": "left",
+       "how": "palms",
+       "elbow": "out",
+       "lead_arm": {
+        "upper": [
+         0.145,
+         -0.506,
+         0.85
+        ],
+        "fore": [
+         -0.826,
+         0.477,
+         0.3
+        ],
+        "wrist": 0
+       }
+      }
+     },
+     {
+      "t": 1.9,
+      "head": {
+       "nod": 8,
+       "tilt": -7,
+       "turn": -8
+      },
+      "torso": {
+       "bend": 2
+      },
+      "hands_meet": {
+       "lead": "left",
+       "how": "palms",
+       "elbow": "out",
+       "lead_arm": {
+        "upper": [
+         0.145,
+         -0.506,
+         0.85
+        ],
+        "fore": [
+         -0.826,
+         0.477,
+         0.3
+        ],
+        "wrist": 0
+       }
+      }
+     },
+     {
+      "t": 2.6,
+      "head": {
+       "nod": 8,
+       "tilt": -12,
+       "turn": -8
+      },
+      "torso": {
+       "bend": -3
+      },
+      "hands_meet": {
+       "lead": "left",
+       "how": "palms",
+       "elbow": "out",
+       "lead_arm": {
+        "upper": [
+         0.145,
+         -0.506,
+         0.85
+        ],
+        "fore": [
+         -0.826,
+         0.477,
+         0.3
+        ],
+        "wrist": 0
+       }
+      }
+     },
+     {
+      "t": 3.3,
+      "head": {
+       "nod": 0,
+       "tilt": 0
+      },
+      "torso": {
+       "bend": 0
+      },
+      "right_arm": "rest",
+      "left_arm": "rest",
+      "hands": {
+       "left": "relaxed",
+       "right": "relaxed"
+      }
+     }
+    ],
+    "_ref": "Grace's joined hands beside the right shoulder (2026-11-07, SOP, ~/hsin_runs/ref_touch/grace/)"
+   },
+   {
+    "name": "cheek_poke_r",
+    "emotion": "surprised",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.3,
+      "head": {
+       "turn": 8,
+       "tilt": -6
+      },
+      "right_arm": {
+       "touch": "cheek",
+       "with": "fingertips"
+      },
+      "hands": {
+       "right": "open"
+      }
+     },
+     {
+      "t": 1.4,
+      "head": {
+       "turn": 6,
+       "tilt": -9
+      },
+      "right_arm": {
+       "touch": "cheek",
+       "with": "fingertips"
+      },
+      "hands": {
+       "right": "open"
+      }
+     },
+     {
+      "t": 2.1,
+      "head": {
+       "turn": 0,
+       "tilt": 0
+      },
+      "right_arm": "rest",
+      "hands": {
+       "right": "relaxed",
+       "left": "relaxed"
+      }
+     }
+    ]
+   },
+   {
+    "name": "cheek_poke_l",
+    "emotion": "surprised",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.3,
+      "head": {
+       "turn": -8,
+       "tilt": 6
+      },
+      "left_arm": {
+       "touch": "cheek",
+       "with": "fingertips"
+      },
+      "hands": {
+       "left": "open"
+      }
+     },
+     {
+      "t": 1.4,
+      "head": {
+       "turn": -6,
+       "tilt": 9
+      },
+      "left_arm": {
+       "touch": "cheek",
+       "with": "fingertips"
+      },
+      "hands": {
+       "left": "open"
+      }
+     },
+     {
+      "t": 2.1,
+      "head": {
+       "turn": 0,
+       "tilt": 0
+      },
+      "left_arm": "rest",
+      "hands": {
+       "right": "relaxed",
+       "left": "relaxed"
+      }
+     }
+    ]
+   },
+   {
+    "name": "hand_r",
+    "emotion": "happy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.6,
+      "head": {
+       "turn": -18,
+       "nod": 8
+      },
+      "right_arm": {
+       "hand": "shoulder front close",
+       "palm": "back",
+       "wrist": 8
+      },
+      "hands": {
+       "right": "open"
+      }
+     },
+     {
+      "t": 1.8,
+      "head": {
+       "turn": -16,
+       "nod": 6,
+       "tilt": -4
+      },
+      "right_arm": {
+       "hand": "shoulder front close",
+       "palm": "back",
+       "wrist": 4
+      }
+     },
+     {
+      "t": 2.6,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": 0
+      },
+      "right_arm": "rest",
+      "hands": {
+       "right": "relaxed"
+      }
+     }
+    ]
+   },
+   {
+    "name": "hand_l",
+    "emotion": "happy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.6,
+      "head": {
+       "turn": 18,
+       "nod": 8
+      },
+      "left_arm": {
+       "hand": "shoulder front close",
+       "palm": "back",
+       "wrist": 8
+      },
+      "hands": {
+       "left": "open"
+      }
+     },
+     {
+      "t": 1.8,
+      "head": {
+       "turn": 16,
+       "nod": 6,
+       "tilt": 4
+      },
+      "left_arm": {
+       "hand": "shoulder front close",
+       "palm": "back",
+       "wrist": 4
+      }
+     },
+     {
+      "t": 2.6,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": 0
+      },
+      "left_arm": "rest",
+      "hands": {
+       "left": "relaxed"
+      }
+     }
+    ]
+   },
+   {
+    "name": "shoulder_r",
+    "emotion": "neutral",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.35,
+      "head": {
+       "turn": -28,
+       "nod": 18
+      }
+     },
+     {
+      "t": 0.9,
+      "head": {
+       "turn": -26,
+       "nod": 16
+      }
+     },
+     {
+      "t": 1.4,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": -8
+      }
+     },
+     {
+      "t": 2.2,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": -7
+      }
+     },
+     {
+      "t": 2.8,
+      "head": {
+       "tilt": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "shoulder_l",
+    "emotion": "neutral",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.35,
+      "head": {
+       "turn": 28,
+       "nod": 18
+      }
+     },
+     {
+      "t": 0.9,
+      "head": {
+       "turn": 26,
+       "nod": 16
+      }
+     },
+     {
+      "t": 1.4,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": 8
+      }
+     },
+     {
+      "t": 2.2,
+      "head": {
+       "turn": 0,
+       "nod": 0,
+       "tilt": 7
+      }
+     },
+     {
+      "t": 2.8,
+      "head": {
+       "tilt": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "belly",
+    "emotion": "happy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.3,
+      "torso": {
+       "lean": 14
+      },
+      "head": {
+       "nod": 10
+      },
+      "shoulders": {
+       "left": 12,
+       "right": 12
+      }
+     },
+     {
+      "t": 0.8,
+      "torso": {
+       "lean": 12,
+       "bend": 5
+      }
+     },
+     {
+      "t": 1.3,
+      "torso": {
+       "lean": 12,
+       "bend": -5
+      }
+     },
+     {
+      "t": 2.2,
+      "torso": {
+       "lean": 0,
+       "bend": 0
+      },
+      "head": {
+       "nod": 0
+      },
+      "shoulders": {
+       "left": 0,
+       "right": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "legs",
+    "emotion": "neutral",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.5,
+      "head": {
+       "nod": 30
+      },
+      "torso": {
+       "lean": 8
+      }
+     },
+     {
+      "t": 1.5,
+      "head": {
+       "nod": 28,
+       "tilt": 6
+      },
+      "torso": {
+       "lean": 8
+      }
+     },
+     {
+      "t": 2.2,
+      "head": {
+       "nod": 0,
+       "tilt": 0
+      },
+      "torso": {
+       "lean": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "shy_cover",
+    "emotion": "shy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.45,
+      "torso": {
+       "lean": -5
+      },
+      "head": {
+       "nod": 12,
+       "turn": 15
+      },
+      "arms_cross": {
+       "how": "cover",
+       "top": "left"
+      }
+     },
+     {
+      "t": 1.8,
+      "head": {
+       "nod": 10,
+       "turn": 18
+      },
+      "arms_cross": {
+       "how": "cover",
+       "top": "left"
+      }
+     },
+     {
+      "t": 2.8,
+      "torso": {
+       "lean": 0
+      },
+      "head": {
+       "nod": 0,
+       "turn": 0
+      },
+      "right_arm": "rest",
+      "left_arm": "rest",
+      "hands": {
+       "left": "relaxed",
+       "right": "relaxed"
+      }
+     }
+    ],
+    "_ref": "ai-pose-gallery U053 (arms crossed, hands on the chest) + T021 legs (knees together), 2026-11-07"
+   },
+   {
+    "name": "shy_skirt",
+    "emotion": "shy",
+    "keyframes": [
+     {
+      "t": 0
+     },
+     {
+      "t": 0.4,
+      "torso": {
+       "lean": 10
+      },
+      "head": {
+       "nod": 14,
+       "turn": 10
+      },
+      "right_arm": {
+       "touch": "thigh",
+       "with": "palm"
+      },
+      "left_arm": {
+       "touch": "thigh",
+       "with": "palm"
+      }
+     },
+     {
+      "t": 1.9,
+      "torso": {
+       "lean": 8
+      },
+      "head": {
+       "nod": 12,
+       "turn": 12
+      },
+      "right_arm": {
+       "touch": "thigh",
+       "with": "palm"
+      },
+      "left_arm": {
+       "touch": "thigh",
+       "with": "palm"
+      }
+     },
+     {
+      "t": 2.8,
+      "torso": {
+       "lean": 0
+      },
+      "head": {
+       "nod": 0,
+       "turn": 0
+      },
+      "right_arm": "rest",
+      "left_arm": "rest"
+     }
+    ]
+   }
+  ]
+ }
+}

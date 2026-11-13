@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HSIN companion</title>
+  <style>
+    html, body { margin: 0; height: 100%; font: 15px system-ui, "Microsoft JhengHei", sans-serif; background: #e9edf2;
+                 overflow: hidden; user-select: none; }
+    html.clear, html.clear body { background: transparent; }
+    #view { display: block; width: 100%; height: 100%; }
+    /* the line as a speech bubble above the head (placed by companion.js) */
+    #say { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); max-width: min(86vw, 360px);
+           width: max-content; padding: 8px 13px; border-radius: 14px; background: rgba(255, 255, 255, .95);
+           color: #1f2933; line-height: 1.45; box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+           transition: opacity .6s; opacity: 0; pointer-events: none; }
+    #say.on { opacity: 1; }
+    /* where she will land while she is dragged (2026-11-07, the author Q11); .snap = the drop snaps onto the taskbar */
+    #land { position: absolute; left: 0; top: 0; pointer-events: none; border-radius: 50%; opacity: 0;
+            transform: translate(-50%, -50%); background: radial-gradient(closest-side, rgba(20,20,40,.45), rgba(20,20,40,0));
+            transition: opacity .15s; }
+    #land.on { opacity: 1; }
+    /* window snapping: a blue light where she will sit (her bottom on the edge) or on the side she will lean on */
+    #glow { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transition: opacity .12s; border-radius: 6px;
+            background: rgba(60,130,255,.85); box-shadow: 0 0 12px 4px rgba(60,130,255,.7); }
+    #glow.on { opacity: 1; }
+    #land.snap { background: radial-gradient(closest-side, rgba(40,90,220,.75), rgba(40,90,220,.25) 70%, rgba(40,90,220,0)); }
+    /* a raised hand behind the bubble: it fades so the hand shows; it stays where it is, near the head (2026-11-05, the author) */
+    #say.on.behind { opacity: .3; transition: opacity .2s; }
+    #say::after { content: ""; position: absolute; left: 50%; bottom: -7px; margin-left: -7px; border: 7px solid transparent;
+                  border-bottom: 0; border-top-color: rgba(255, 255, 255, .95); }
+    #status { position: absolute; top: 8px; left: 10px; color: #52606d; font-size: 12px; text-shadow: 0 0 3px #fff; }
+    #replay { position: absolute; top: 6px; right: 8px; border: 0; border-radius: 6px; padding: 4px 10px;
+              background: rgba(255, 255, 255, .85); cursor: pointer; display: none; }
+    body.app #replay { display: none !important; }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="status">loading…</div>
+  <button id="replay">↻</button>
+  <div id="say"></div>
+  <div id="land"></div>
+  <div id="glow"></div>
+  <script type="module" src="./companion.js"></script>
+</body>
+</html>

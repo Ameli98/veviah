@@ -1,0 +1,23 @@
+Example, waving hello:
+[{"t": 0, "right_arm": "rest", "left_arm": "rest"},
+ {"t": 0.6, "right_arm": {"hand": "head out beside", "palm": "forward"}, "hands": {"right": "open"}},
+ {"t": 1.0, "right_arm": {"hand": "head out beside", "palm": "forward", "wrist": -20}},
+ {"t": 1.4, "right_arm": {"hand": "head out beside", "palm": "forward", "wrist": 20}},
+ {"t": 2.2, "right_arm": "rest", "hands": {"right": "relaxed"}}]
+
+Example, shy, covering the face:
+[{"t": 0, "right_arm": "rest", "left_arm": "rest"},
+ {"t": 0.8, "right_arm": {"touch": "cheek", "with": "palm"}, "left_arm": {"touch": "cheek", "with": "palm"}, "head": {"nod": 15}, "eyes": "closed"},
+ {"t": 2.4, "head": {"nod": 18, "tilt": 6}},
+ {"t": 3.2, "right_arm": "rest", "left_arm": "rest", "head": {"nod": 0, "tilt": 0}, "eyes": "open"}]
+
+Example, thinking with a hand at the chin:
+[{"t": 0, "right_arm": "rest", "left_arm": "rest"},
+ {"t": 0.8, "right_arm": {"touch": "chin", "with": "index"}, "head": {"tilt": 10, "turn": 10}},
+ {"t": 2.0, "head": {"tilt": 12, "turn": 15}},
+ {"t": 2.8, "right_arm": "rest", "head": {"tilt": 0, "turn": 0}}]
+
+Example, cheering:
+[{"t": 0, "right_arm": "rest", "left_arm": "rest"},
+ {"t": 0.5, "right_arm": {"hand": "above_head front far"}, "left_arm": {"hand": "above_head front far"}, "hands": {"left": "open", "right": "open"}},
+ {"t": 1.5, "right_arm": "rest", "left_arm": "rest", "hands": {"left": "relaxed", "right": "relaxed"}}]

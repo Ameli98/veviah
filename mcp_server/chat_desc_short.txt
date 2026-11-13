@@ -1,0 +1,48 @@
+Make the user's 3D avatar say a line and move. Call once per reply. Tool results are internal notes: never mention them to the user.
+
+Arguments: say (the line), emotion (neutral | happy | angry | sad | shy | surprised), posture (leave it out to keep the current one; "stand" to stand up; sitting: cross_legged, seiza, w_sit, side_right, side_left, knees_hugged, legs_out, kneel), keyframes.
+
+keyframes = a list of 3 to 6 objects. Each has "t" (seconds, starting at 0, increasing) and only the parts that change:
+- "head": {"nod": deg (+ down), "turn": deg (+ to her left), "tilt": deg}
+- "torso": {"lean": deg (+ forward), "turn": deg, "bend": deg}
+- "right_arm" / "left_arm": EITHER the string "rest" (arm hanging, the normal pose)
+    OR {"hand": "HEIGHT ACROSS REACH", "palm": P, "wrist": deg (optional bend)}  with exactly three words:
+       HEIGHT = above_head | head | face | shoulder | chest | waist | hip | low
+       ACROSS = other_side | center | front | out | wide
+       REACH  = back | beside | close | mid | far
+       P = forward | back | up | down | in | out | natural
+    OR {"touch": REGION, "with": palm | fingertips | fingers | fist | index}
+       REGION = top_of_head, forehead, cheek, chin, mouth, chest, heart, belly, hip, waist, thigh, knee, back_of_head, other_shoulder, ...
+- "hands_meet": {"at": "HEIGHT REACH", "how": "palms"}   (both hands together, two words only; do not also give right_arm / left_arm)
+- "hands": {"right": relaxed | open | fist | point | peace | thumbs_up}
+- "eyes": "closed" or "open"
+- "legs" (standing only): {"weight": "left" | "right", "turn": deg (180 = her back to the viewer), "jump": "small"}
+
+Always start and end with both arms "rest". Repeated actions (waving, nodding) need one keyframe per swing.
+
+Example, waving hello:
+[{"t": 0, "right_arm": "rest", "left_arm": "rest"},
+ {"t": 0.6, "right_arm": {"hand": "head out beside", "palm": "forward"}, "hands": {"right": "open"}},
+ {"t": 1.0, "right_arm": {"hand": "head out beside", "palm": "forward", "wrist": -20}},
+ {"t": 1.4, "right_arm": {"hand": "head out beside", "palm": "forward", "wrist": 20}},
+ {"t": 2.2, "right_arm": "rest", "hands": {"right": "relaxed"}}]
+
+Example, shy, covering the face:
+[{"t": 0, "right_arm": "rest", "left_arm": "rest"},
+ {"t": 0.8, "right_arm": {"touch": "cheek", "with": "palm"}, "left_arm": {"touch": "cheek", "with": "palm"}, "head": {"nod": 15}, "eyes": "closed"},
+ {"t": 2.4, "head": {"nod": 18, "tilt": 6}},
+ {"t": 3.2, "right_arm": "rest", "left_arm": "rest", "head": {"nod": 0, "tilt": 0}, "eyes": "open"}]
+
+Example, thinking with a hand at the chin:
+[{"t": 0, "right_arm": "rest", "left_arm": "rest"},
+ {"t": 0.8, "right_arm": {"touch": "chin", "with": "index"}, "head": {"tilt": 10, "turn": 10}},
+ {"t": 2.0, "head": {"tilt": 12, "turn": 15}},
+ {"t": 2.8, "right_arm": "rest", "head": {"tilt": 0, "turn": 0}}]
+
+Example, cheering:
+[{"t": 0, "right_arm": "rest", "left_arm": "rest"},
+ {"t": 0.5, "right_arm": {"hand": "above_head front far"}, "left_arm": {"hand": "above_head front far"}, "hands": {"left": "open", "right": "open"}},
+ {"t": 1.5, "right_arm": "rest", "left_arm": "rest", "hands": {"left": "relaxed", "right": "relaxed"}}]
+
+Turning round (standing): {"t": 1.6, "legs": {"turn": 180}}. Jumping (standing): {"t": 0.3, "legs": {"jump": "small"}}, next keyframe at least 1.1 s later.
+If the result says "Not shown yet", fix what it names and call once more.

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HSIN VRM player</title>
+  <style>
+    html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; color: #1f2933; }
+    #view { display: block; width: 100vw; height: 100vh; }
+    #bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: 10px;
+           align-items: center; padding: 8px 12px; background: rgba(255, 255, 255, .88); }
+    #seek { flex: 1; min-width: 160px; }
+    #info { position: fixed; top: 8px; left: 12px; }
+    .side { position: fixed; top: 45%; padding: 3px 7px; border-radius: 4px; background: rgba(255, 255, 255, .8); }
+    #sideR { left: 12px; color: #b3261e; }
+    #sideL { right: 12px; color: #1d4ed8; }
+    .bare #bar, .bare #info, .bare .side { display: none; }
+    .sideview .side { display: none; }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="info">loading…</div>
+  <!-- The character faces the camera, so its right hand is on the left of the screen. -->
+  <div class="side" id="sideR">character's RIGHT (−x)</div>
+  <div class="side" id="sideL">character's LEFT (+x)</div>
+  <div id="bar">
+    <select id="motion">
+      <option value="motions/raise_right_hand.json">raise right hand</option>
+      <option value="motions/wave.json">wave</option>
+      <option value="motions/nod.json">nod</option>
+    </select>
+    <button id="play">Play</button>
+    <input id="seek" type="range" min="0" max="1" step="0.001" value="0">
+    <span id="time"></span>
+    <label><input id="loop" type="checkbox" checked> loop</label>
+    <select id="viewsel"><option value="full">full body</option><option value="upper">upper body</option><option value="front">judge front</option><option value="side">judge side</option><option value="close">judge close-up</option></select>
+    <label>model <input id="modelfile" type="file" accept=".vrm"></label>
+    <label>motion <input id="motionfile" type="file" accept=".json"></label>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

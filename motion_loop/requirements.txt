@@ -1,0 +1,5 @@
+numpy
+pillow
+torch
+anthropic          # only needed for the real LMM (AnthropicLLM)
+# sentence-transformers   # optional: real text encoder for the reward model
