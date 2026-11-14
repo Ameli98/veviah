@@ -112,6 +112,22 @@ Your key is encrypted with your Windows account and stays on your PC. It is sent
 
 <p align="center"><img src="images/settings_chat.png" width="480" alt="Settings, built-in chat">&nbsp;&nbsp;<img src="images/chat_window.png" width="300" alt="The chat window"></p>
 
+#### Free, on your own PC: Ollama
+
+No account, no key, nothing leaves your PC. It is slower than a cloud model (about 10-20 seconds per reply) and the
+motions are simpler.
+
+1. Download **Ollama** from [ollama.com/download](https://ollama.com/download), install it and open it.
+2. Download a model. Press the **Windows** key, type `cmd`, press **Enter**, then type one of these and press
+   **Enter** (it downloads several GB, so it takes a while):
+   - `ollama pull qwen3.5:9b` — about 6.6 GB, fits an 8 GB graphics card.
+   - `ollama pull gpt-oss:20b` — about 14 GB, better motions; needs 16 GB of memory or more.
+3. In VEviaH's settings, **Step 2** → **Chat in the VEviaH window** → **Provider**: **Ollama**.
+4. **Model**: pick the one you downloaded. Only models that can drive her are listed, with their size.
+5. Click **Open chat** and say hello.
+
+If it says Ollama can't be found, open Ollama first (its icon appears next to the clock).
+
 ---
 
 ## 3. Everyday use

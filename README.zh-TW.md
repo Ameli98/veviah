@@ -103,6 +103,21 @@
 
 <p align="center"><img src="images/settings_chat.zh-TW.png" width="480" alt="設定畫面（內建聊天）">&nbsp;&nbsp;<img src="images/chat_window.zh-TW.png" width="300" alt="聊天視窗"></p>
 
+#### 免費、在自己電腦上跑：Ollama
+
+不用帳號、不用 key，資料不會離開你的電腦。比雲端模型慢（每次回覆大約 10～20 秒），動作也比較簡單。
+
+1. 到 [ollama.com/download](https://ollama.com/download) 下載 **Ollama**，安裝後打開。
+2. 下載模型。按鍵盤的 **Windows** 鍵，輸入 `cmd`，按 **Enter**，再輸入下面其中一行，按 **Enter**
+   （要下載好幾 GB，會等一陣子）：
+   - `ollama pull qwen3.5:9b`：約 6.6 GB，8 GB 顯示卡放得下。
+   - `ollama pull gpt-oss:20b`：約 14 GB，動作比較好；記憶體要 16 GB 以上。
+3. VEviaH 設定的**步驟 2** →「**用 VEviaH 內建的聊天視窗**」→ **服務商**選 **Ollama**。
+4. **模型**：選你剛下載的那個。清單只會列出能讓她動起來的模型，旁邊標了大小。
+5. 按「**開啟聊天視窗**」，跟她打招呼。
+
+如果顯示「找不到 Ollama」，先打開 Ollama（時鐘旁邊會出現它的圖示）。
+
 ---
 
 ## 3. 平常怎麼用

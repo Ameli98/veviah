@@ -57,7 +57,7 @@ export class Chat {
 
   async description(cfg) {
     const { description } = await this.tool();
-    const short = cfg.desc === 'short' || (cfg.desc !== 'long' && cfg.kind === 'openai' && isLocal(cfg.baseUrl));
+    const short = cfg.desc === 'short' || (cfg.desc !== 'long' && (cfg.kind === 'ollama' || (cfg.kind === 'openai' && isLocal(cfg.baseUrl))));
     return short ? SHORT() : `${description}\n\n${await EXAMPLES()}`;
   }
 
@@ -124,7 +124,12 @@ export class Chat {
           msgs.push({ role: 'tool', id: c.id, name: c.name, result });
         }
       }
-    } catch (e) { error = errorCode(e); this.log('chat error', e.status ?? '', e.message ?? e); }
+    } catch (e) {
+      this.log('chat error', e.status ?? '', e.message ?? e);
+      // a failure after a line was shown (2026-11-14: Ollama's 500 when it cannot parse gpt-oss's closing reply) ends
+      // the turn quietly: she already answered
+      if (!turn.lines.length) error = errorCode(e);
+    }
     for (const k of ['in', 'out', 'cost']) this.session[k] += usage[k];
     this.session.costKnown &&= usage.costKnown;
     if (turn.lines.length || turn.reply) {
@@ -166,6 +171,7 @@ export class Chat {
         for await (const m of c.models.list()) out.push({ id: m.id, name: m.display_name || m.id, price: priceText(priceOf(m.id)) });
         return { ok: true, models: out };
       }
+      if (cfg.kind === 'ollama') return await ollamaModels(cfg);
       const r = await fetch(`${base(cfg)}/models`, { headers: auth(cfg) });
       if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
       const data = (await r.json()).data ?? [];
@@ -207,6 +213,7 @@ function errorCode(e) {
   if (s === 402) return 'credit';
   if (/credit balance/i.test(e?.message ?? '')) return 'credit';
   if (s >= 500) return 'server';
+  if (e?.ollama && /fetch failed|ECONNREFUSED/.test(e?.message ?? e?.cause?.message ?? '')) return 'noollama';
   if (e?.name === 'APIConnectionError' || /fetch failed|ECONNREFUSED|ENOTFOUND/.test(e?.message ?? e?.cause?.message ?? '')) return 'network';
   return 'other';
 }
@@ -218,7 +225,9 @@ const auth = (cfg) => (cfg.key ? { Authorization: `Bearer ${cfg.key}` } : {});
 
 // ---- the two adapters; both return {text, calls: [{id, name, args}], raw, refusal, usage: {in, out, cost|null}} ----
 function call(cfg, system, msgs, tools, maxTokens = 4000) {
-  return cfg.kind === 'anthropic' ? callAnthropic(cfg, system, msgs, tools, maxTokens) : callOpenAI(cfg, system, msgs, tools, maxTokens);
+  if (cfg.kind === 'anthropic') return callAnthropic(cfg, system, msgs, tools, maxTokens);
+  if (cfg.kind === 'ollama') return callOllama(cfg, system, msgs, tools, maxTokens);
+  return callOpenAI(cfg, system, msgs, tools, maxTokens);
 }
 
 async function callAnthropic(cfg, system, msgs, tools, maxTokens) {
@@ -284,4 +293,65 @@ async function callOpenAI(cfg, system, msgs, tools, maxTokens) {
   const u = j.usage ?? {};
   const cost = isLocal(cfg.baseUrl) ? 0 : typeof u.cost === 'number' ? u.cost : null;
   return { text: msg.content ?? '', calls, raw: null, refusal: false, usage: { in: u.prompt_tokens ?? 0, out: u.completion_tokens ?? 0, cost } };
+}
+
+// ---- Ollama through its own API (2026-11-14). Its OpenAI-compatible endpoint cannot set the context size, and
+// Ollama's default (4096 tokens) silently cuts the instructions + tool description + history from the front; the
+// open-model test of 2026-11-12 ran on /api/chat with num_ctx 16384, so the app does the same. baseUrl = the server
+// root (http://localhost:11434). gpt-oss cannot turn thinking off ('low'), others run without it.
+const OLLAMA_CTX = 16384;
+const ollamaBase = (cfg) => base(cfg).replace(/\/v1$/, '');
+async function ollamaFetch(cfg, p, body) {
+  let r;
+  try {
+    r = await fetch(`${ollamaBase(cfg)}${p}`, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+  } catch (e) { throw Object.assign(e, { ollama: true }); }
+  if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 300)}`), { status: r.status });
+  return r.json();
+}
+// the installed models that can call tools (Ollama's /api/show capabilities), with their size on disk
+async function ollamaModels(cfg) {
+  const tags = (await ollamaFetch(cfg, '/api/tags')).models ?? [];
+  const out = [];
+  for (const m of tags) {
+    let caps = [];
+    try { caps = (await ollamaFetch(cfg, '/api/show', { model: m.name })).capabilities ?? []; } catch { /* unknown: leave it out */ }
+    if (!caps.includes('tools')) continue;
+    const gb = m.size ? `${(m.size / 1e9).toFixed(1)} GB` : null;
+    out.push({ id: m.name, name: m.name, price: gb, size: m.size ?? 0 });
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name));
+  if (!out.length) return { ok: false, error: tags.length ? 'notools' : 'nomodels', models: [] };
+  return { ok: true, models: out };
+}
+async function callOllama(cfg, system, msgs, tools, maxTokens) {
+  const messages = [{ role: 'system', content: system }];
+  for (const m of msgs) {
+    if (m.role === 'user') messages.push({ role: 'user', content: m.text });
+    else if (m.role === 'assistant') {
+      messages.push({ role: 'assistant', content: m.text || '',
+        ...(m.calls.length ? { tool_calls: m.calls.map((c) => ({ function: { name: c.name, arguments: c.args ?? {} } })) } : {}) });
+    } else messages.push({ role: 'tool', content: m.result });
+  }
+  const body = { model: cfg.model, messages, stream: false, think: /gpt-oss/i.test(cfg.model) ? 'low' : false,
+    options: { num_ctx: OLLAMA_CTX, num_predict: maxTokens },
+    ...(tools.length ? { tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.schema } })) } : {}) };
+  let j;
+  for (let a = 0; ; a++) {
+    try { j = await ollamaFetch(cfg, '/api/chat', body); break; }
+    catch (e) {
+      // a model that cannot think rejects `think` with 400 on some Ollama versions: once more without it
+      if (e.status === 400 && /think/i.test(e.message) && 'think' in body) { delete body.think; continue; }
+      // Ollama answers 500 when it cannot parse a model's tool call (seen with gpt-oss): one more try
+      if (e.status === 500 && a < 1) continue;
+      throw e;
+    }
+  }
+  const msg = j.message ?? {};
+  const calls = (msg.tool_calls ?? []).map((c, i) => {
+    let args = c.function?.arguments;
+    if (typeof args === 'string') { try { args = JSON.parse(args); } catch { args = { _unparsed: args }; } }
+    return { id: `call_${Date.now()}_${i}`, name: c.function?.name, args };
+  });
+  return { text: msg.content ?? '', calls, raw: null, refusal: false, usage: { in: j.prompt_eval_count ?? 0, out: j.eval_count ?? 0, cost: 0 } };
 }

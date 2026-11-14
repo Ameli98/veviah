@@ -12,7 +12,7 @@ const PROVIDERS = {
   openrouter: { kind: 'openai', baseUrl: 'https://openrouter.ai/api/v1', model: '' },
   gemini: { kind: 'openai', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: '' },
   deepseek: { kind: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-  ollama: { kind: 'openai', baseUrl: 'http://localhost:11434/v1', model: '', local: true },
+  ollama: { kind: 'ollama', baseUrl: 'http://localhost:11434', model: '', local: true },   // its own API (context size, chat.mjs)
   lmstudio: { kind: 'openai', baseUrl: 'http://localhost:1234/v1', model: '', local: true },
   custom: { kind: 'openai', baseUrl: '', model: '' },
 };
@@ -33,7 +33,7 @@ module.exports = function chatMain({ settings, saveSettings, BASE, tr, texts, in
   const cfg = () => ({ kind: PROVIDERS[provider()].kind, baseUrl: baseUrl(), model: model(), key: key(), desc: c().desc ?? 'auto' });
   const builtin = () => c().mode === 'builtin';
   // ready = a model, and a key unless the endpoint is on this computer
-  const ready = () => !!(model() && (key() || (PROVIDERS[provider()].kind === 'openai' && isLocal(baseUrl()))));
+  const ready = () => !!(model() && (key() || (PROVIDERS[provider()].kind !== 'anthropic' && isLocal(baseUrl()))));
   const system = () => {
     const p = String(c().persona ?? '').trim();
     return instructions() + (p ? `\n\n${tr('personaHead')}\n${p}` : '');
