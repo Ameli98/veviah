@@ -12,6 +12,8 @@
 //     round verbatim; past KEEP + SUMMARIZE_AT turns the older ones are summarized into `summary` (kept in the system
 //     prompt) and dropped. clear() empties both.
 //   cost (Q9): Anthropic list prices below, OpenRouter's usage.cost, localhost = free, else tokens only.
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,7 +55,7 @@ export class Chat {
     this.mcp = { client, description: t.description, schema: t.inputSchema };
     return this.mcp;
   }
-  async close() { try { await this.mcp?.client.close(); } catch { /* gone */ } this.mcp = null; }
+  async close() { try { await this.mcp?.client.close(); } catch { /* gone */ } this.mcp = null; stopOllama(); }
 
   async description(cfg) {
     const { description } = await this.tool();
@@ -187,7 +189,7 @@ export class Chat {
         .sort((x, y) => x.name.localeCompare(y.name));
       if (!models.length) return { ok: false, error: 'nolist', models: [] };
       return { ok: true, models };
-    } catch (e) { return { ok: false, error: e.status === 404 ? 'nolist' : errorCode(e), models: [] }; }
+    } catch (e) { return { ok: false, error: e.status === 404 ? 'nolist' : errorCode(e), message: String(e.message ?? e).slice(0, 200), models: [] }; }
   }
 }
 
@@ -213,6 +215,7 @@ function errorCode(e) {
   if (s === 402) return 'credit';
   if (/credit balance/i.test(e?.message ?? '')) return 'credit';
   if (s >= 500) return 'server';
+  if (e?.ollamaCode) return e.ollamaCode;
   if (e?.ollama && /fetch failed|ECONNREFUSED/.test(e?.message ?? e?.cause?.message ?? '')) return 'noollama';
   if (e?.name === 'APIConnectionError' || /fetch failed|ECONNREFUSED|ENOTFOUND/.test(e?.message ?? e?.cause?.message ?? '')) return 'network';
   return 'other';
@@ -300,12 +303,78 @@ async function callOpenAI(cfg, system, msgs, tools, maxTokens) {
 // open-model test of 2026-11-12 ran on /api/chat with num_ctx 16384, so the app does the same. baseUrl = the server
 // root (http://localhost:11434). gpt-oss cannot turn thinking off ('low'), others run without it.
 const OLLAMA_CTX = 16384;
+// Starting Ollama when it is not running (2026-11-14, Q1 / Q2). Looked for in this order: the Windows app's own place
+// (%LOCALAPPDATA%\Programs\Ollama\ollama app.exe: starts the server + its tray icon), `ollama` on the PATH (`ollama
+// serve`), and on Windows an Ollama inside WSL (`wsl.exe -e sh -lc "ollama serve"`; Windows reaches WSL's localhost).
+// Nothing found = not installed ('ollama_missing'); found but not answering within OLLAMA_START_S = 'ollama_failed'.
+// What we start we stop again with the app (stopOllama, from Chat.close); an Ollama the user started is left alone.
+const OLLAMA_START_S = 25;
+let ollamaProc = null, ollamaHow = null, ollamaStarting = null;
+const which = (cmd) => new Promise((res) => {
+  const p = spawn(process.platform === 'win32' ? 'where' : 'which', [cmd], { windowsHide: true });
+  let out = ''; p.stdout.on('data', (d) => { out += d; });
+  p.on('error', () => res(null)); p.on('close', (c) => res(c === 0 ? out.split(/\r?\n/)[0].trim() || null : null));
+});
+const wslHasOllama = () => new Promise((res) => {
+  if (process.platform !== 'win32') return res(false);
+  const p = spawn('wsl.exe', ['-e', 'sh', '-lc', 'command -v ollama'], { windowsHide: true });
+  let out = ''; p.stdout.on('data', (d) => { out += d; });
+  const t = setTimeout(() => { try { p.kill(); } catch { /* gone */ } res(false); }, 15000);
+  p.on('error', () => { clearTimeout(t); res(false); }); p.on('close', (c) => { clearTimeout(t); res(c === 0 && /ollama/.test(out)); });
+});
+async function findOllama() {
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
+    const appExe = path.join(process.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama app.exe');
+    if (existsSync(appExe)) return { how: 'app', cmd: appExe, args: [] };
+  }
+  const exe = await which('ollama');
+  if (exe) return { how: 'path', cmd: exe, args: ['serve'] };
+  if (await wslHasOllama()) return { how: 'wsl', cmd: 'wsl.exe', args: ['-e', 'sh', '-lc', 'ollama serve'] };
+  return null;
+}
+async function startOllama(cfg) {
+  ollamaStarting ??= (async () => {
+    const found = await findOllama();
+    if (!found) throw Object.assign(new Error('Ollama is not installed'), { ollamaCode: 'ollama_missing' });
+    let exitMsg = '';
+    try {
+      const p = spawn(found.cmd, found.args, { windowsHide: true, detached: found.how === 'app', stdio: ['ignore', 'ignore', 'pipe'] });
+      p.stderr?.on('data', (d) => { exitMsg = String(d).trim().split(/\r?\n/).pop().slice(0, 200); });
+      p.on('exit', (c) => { if (c) exitMsg ||= `exited with ${c}`; if (ollamaProc === p) ollamaProc = null; });
+      p.on('error', (e) => { exitMsg = e.message; });
+      ollamaProc = p; ollamaHow = found.how;
+    } catch (e) { throw Object.assign(new Error(e.message), { ollamaCode: 'ollama_failed' }); }
+    for (let i = 0; i < OLLAMA_START_S * 2; i++) {
+      await new Promise((ok) => setTimeout(ok, 500));
+      try { if ((await fetch(`${ollamaBase(cfg)}/api/version`)).ok) return found.how; } catch { /* not yet */ }
+    }
+    throw Object.assign(new Error(`Ollama (${found.how}) did not answer${exitMsg ? `: ${exitMsg}` : ''}`), { ollamaCode: 'ollama_failed' });
+  })().finally(() => { ollamaStarting = null; });
+  return ollamaStarting;
+}
+export function stopOllama() {
+  const p = ollamaProc, how = ollamaHow; ollamaProc = null; ollamaHow = null;
+  if (!p) return;
+  // ending wsl.exe leaves `ollama serve` running inside WSL: stop it there (we only started it when nothing was
+  // listening, so every ollama process in WSL is ours)
+  if (how === 'wsl') { spawn('wsl.exe', ['-e', 'sh', '-lc', 'pkill -x ollama'], { windowsHide: true }); }
+  if (p.exitCode != null) return;
+  if (process.platform === 'win32') spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { windowsHide: true });
+  else try { p.kill(); } catch { /* gone */ }
+}
 const ollamaBase = (cfg) => base(cfg).replace(/\/v1$/, '');
-async function ollamaFetch(cfg, p, body) {
+async function ollamaFetch(cfg, p, body, again = true) {
   let r;
   try {
     r = await fetch(`${ollamaBase(cfg)}${p}`, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
-  } catch (e) { throw Object.assign(e, { ollama: true }); }
+  } catch (e) {
+    // nobody listening: start Ollama ourselves (2026-11-14, the author: users do not know it must be running), then once more
+    if (again && /fetch failed|ECONNREFUSED/.test(e?.message ?? e?.cause?.message ?? '') && isLocal(ollamaBase(cfg))) {
+      await startOllama(cfg);
+      return ollamaFetch(cfg, p, body, false);
+    }
+    throw Object.assign(e, { ollama: true });
+  }
   if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 300)}`), { status: r.status });
   return r.json();
 }
@@ -333,7 +402,9 @@ async function callOllama(cfg, system, msgs, tools, maxTokens) {
         ...(m.calls.length ? { tool_calls: m.calls.map((c) => ({ function: { name: c.name, arguments: c.args ?? {} } })) } : {}) });
     } else messages.push({ role: 'tool', content: m.result });
   }
-  const body = { model: cfg.model, messages, stream: false, think: /gpt-oss/i.test(cfg.model) ? 'low' : false,
+  // keep the model loaded 10 min after the last line (Ollama's default is 5; the author 2026-11-14: 5-10 min, loading
+  // gpt-oss:20b takes 15-30 s on an 8 GB card)
+  const body = { model: cfg.model, messages, stream: false, keep_alive: '10m', think: /gpt-oss/i.test(cfg.model) ? 'low' : false,
     options: { num_ctx: OLLAMA_CTX, num_predict: maxTokens },
     ...(tools.length ? { tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.schema } })) } : {}) };
   let j;

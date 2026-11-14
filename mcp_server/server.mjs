@@ -13,7 +13,7 @@ import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
-import { COMPANION_PORT, MODEL_PATH, ROOT, STORE, measured, modelInfo, motionFile, PYTHON, PY_ENV } from './model.mjs';
+import { companionPort, MODEL_PATH, ROOT, STORE, measured, modelInfo, motionFile, PYTHON, PY_ENV } from './model.mjs';
 
 // perform on a model not measured yet waits this long for the view to measure it (the view loads while the
 // tool runs), so the first motion is already solved for the right body; after that it falls back to the default
@@ -24,7 +24,7 @@ const MEASURE_WAIT_MS = 20000;
 // process's own (env HSIN_VRM_MODEL, else the default sample)
 async function current() {
   try {
-    const r = await fetch(`http://127.0.0.1:${COMPANION_PORT}/model/info`, { signal: AbortSignal.timeout(500) });
+    const r = await fetch(`http://127.0.0.1:${companionPort()}/model/info`, { signal: AbortSignal.timeout(500) });
     if (r.ok) { const j = await r.json(); if (j.path) return await modelInfo(j.path); }
   } catch { /* the app is not running */ }
   return modelInfo();
@@ -41,7 +41,7 @@ const log = (...a) => console.error('[hsin]', ...a);
 
 function python(args, input) {
   return new Promise((resolve, reject) => {
-    const p = spawn(PYTHON, ['-m', 'motion_loop.perform', ...args], { cwd: path.join(ROOT, 'motion_loop'), env: SOLVER_ENV });
+    const p = spawn(PYTHON, ['-m', 'motion_loop.perform', ...args], { cwd: path.join(ROOT, 'motion_loop'), env: solverEnv() });
     let out = '', err = '';
     p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { err += d; });
@@ -59,9 +59,9 @@ let queue = Promise.resolve();
 let nextId = 1;
 // Windows app: the solver's cloth-first pass asks the companion, which drapes the skirt in the app's hidden window
 // (motion_loop/vrm_render.py HttpClothProvider); in WSL the solver starts its own headless player instead.
-const SOLVER_ENV = process.platform === 'win32' ? { ...PY_ENV, HSIN_CLOTH_URL: `http://127.0.0.1:${COMPANION_PORT}` } : PY_ENV;
+const solverEnv = () => (process.platform === 'win32' ? { ...PY_ENV, HSIN_CLOTH_URL: `http://127.0.0.1:${companionPort()}` } : PY_ENV);
 function startSolver() {
-  const p = spawn(PYTHON, ['-m', 'motion_loop.perform', 'serve'], { cwd: path.join(ROOT, 'motion_loop'), env: SOLVER_ENV });
+  const p = spawn(PYTHON, ['-m', 'motion_loop.perform', 'serve'], { cwd: path.join(ROOT, 'motion_loop'), env: solverEnv() });
   const waiting = new Map();
   let buf = '';
   p.stdout.on('data', (d) => {
@@ -108,7 +108,7 @@ let warmed = false;
 // The desktop companion window (companion.mjs, 2026-11-03: Claude Desktop stopped showing MCP Apps views of local
 // servers) gets every solved motion; if it is not running, nothing happens.
 function tellCompanion(msg) {
-  fetch(`http://127.0.0.1:${COMPANION_PORT}/play`, { method: 'POST', headers: { 'content-type': 'application/json' },
+  fetch(`http://127.0.0.1:${companionPort()}/play`, { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify(msg), signal: AbortSignal.timeout(1000) }).catch(() => {});
 }
 
@@ -118,14 +118,14 @@ function tellCompanion(msg) {
 // Where she is in the desktop app (window snapping, 2026-11-11): posture and the wall she leans on, or null without one
 async function place() {
   try {
-    const r = await fetch(`http://127.0.0.1:${COMPANION_PORT}/state`, { signal: AbortSignal.timeout(500) });
+    const r = await fetch(`http://127.0.0.1:${companionPort()}/state`, { signal: AbortSignal.timeout(500) });
     return await r.json();
   } catch { return null; }
 }
 const LANG_NAME = { zh: 'Chinese (Traditional, Taiwan)', ja: 'Japanese', en: 'English' };
 async function languages() {
   try {
-    const r = await fetch(`http://127.0.0.1:${COMPANION_PORT}/settings`, { signal: AbortSignal.timeout(500) });
+    const r = await fetch(`http://127.0.0.1:${companionPort()}/settings`, { signal: AbortSignal.timeout(500) });
     const { settings: s } = await r.json();
     return { voice: s.voice ? s.voiceLang : null, ui: s.uiLang };
   } catch { return null; }
@@ -301,7 +301,7 @@ srv.server.oninitialized = () => {
   const c = srv.server.getClientVersion();
   log(`client ${c?.name ?? '?'} ${c?.version ?? ''}`);
   if (c?.name === 'veviah-chat') return;          // the app's own built-in chat (chat.mjs) is not an AI program to list
-  fetch(`http://127.0.0.1:${COMPANION_PORT}/client`, { method: 'POST', headers: { 'content-type': 'application/json' },
+  fetch(`http://127.0.0.1:${companionPort()}/client`, { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name: c?.name ?? 'unknown', version: c?.version ?? '' }), signal: AbortSignal.timeout(1000) }).catch(() => {});
 };
 await srv.connect(new StdioServerTransport());

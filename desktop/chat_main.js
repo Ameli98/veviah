@@ -20,7 +20,7 @@ const PROVIDERS = {
 const HOTKEY = 'Control+Alt+V';
 const isLocal = (u) => /^https?:\/\/(localhost|127\.|\[::1\]|0\.0\.0\.0)/i.test(u ?? '');
 
-module.exports = function chatMain({ settings, saveSettings, BASE, tr, texts, instructions, icon, avatar, log, refreshMenu }) {
+module.exports = function chatMain({ settings, saveSettings, base, tr, texts, instructions, icon, avatar, log, refreshMenu }) {
   const c = () => (settings.chat ??= { mode: 'mcp', provider: 'anthropic', desc: 'auto', persona: '' });
   const provider = () => PROVIDERS[c().provider] ? c().provider : 'anthropic';
   const baseUrl = () => (c().baseUrl ?? PROVIDERS[provider()].baseUrl);
@@ -38,8 +38,8 @@ module.exports = function chatMain({ settings, saveSettings, BASE, tr, texts, in
     const p = String(c().persona ?? '').trim();
     return instructions() + (p ? `\n\n${tr('personaHead')}\n${p}` : '');
   };
-  const post = async (p, b) => (await fetch(`${BASE}${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b ?? {}) })).json();
-  const get = async (p) => (await fetch(`${BASE}${p}`)).json();
+  const post = async (p, b) => (await fetch(`${base()}${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b ?? {}) })).json();
+  const get = async (p) => (await fetch(`${base()}${p}`)).json();
 
   function view() {
     return { mode: c().mode ?? 'mcp', provider: provider(), providers: Object.keys(PROVIDERS), kind: PROVIDERS[provider()].kind,

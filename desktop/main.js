@@ -17,8 +17,10 @@ const i18n = require('./i18n.js');
 if (process.env.VEVIAH_USER_DATA) app.setPath('userData', process.env.VEVIAH_USER_DATA);
 
 const CFG = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
-const PORT = CFG.port ?? 8790;
-const BASE = `http://localhost:${PORT}`;
+// the companion's port: config.json's (8790) or, when another program holds it, the next free one (2026-11-14);
+// chosen in startCompanion, the companion writes it to <data>/config/port.json for the AI apps' MCP servers
+let PORT = CFG.port ?? 8790;
+let BASE = `http://localhost:${PORT}`;
 // Backend (2026-11-12, plan step 4): 'native' = everything in <app folder>/backend (built by build_backend.sh), run with
 // this very exe as Node (ELECTRON_RUN_AS_NODE) and the embedded Python; 'wsl' = the repo in WSL as before (development).
 const NATIVE = CFG.backend === 'native';
@@ -143,13 +145,25 @@ async function clothRequest(child, m) {
   }
 }
 
+function freePort(start, tries = 40) {     // the first port from start nobody listens on (127.0.0.1)
+  const net = require('node:net');
+  return (async () => {
+    for (let p = start; p < start + tries; p++) {
+      const ok = await new Promise((res) => { const sv = net.createServer().once('error', () => res(false)).once('listening', () => sv.close(() => res(true))).listen(p, '127.0.0.1'); });
+      if (ok) return p;
+    }
+    throw new Error(`no free port in ${start}-${start + tries - 1}`);
+  })();
+}
 async function startCompanion(model) {
   await stopCompanion();                  // one left over, or running with another model, goes first
   closeClothWindow();                     // it holds the old model
   if (NATIVE) {
+    try { PORT = await freePort(CFG.port ?? 8790); BASE = `http://localhost:${PORT}`; } catch (e) { log('no free port', e.message); }
+    if (PORT !== (CFG.port ?? 8790)) log('port', CFG.port ?? 8790, 'is taken: using', PORT);
     const out = fs.openSync(path.join(app.getPath('userData'), 'companion.log'), 'w');
     const child = spawn(process.execPath, [path.join(BACKEND, 'mcp_server', 'companion.mjs')], { windowsHide: true, detached: false, stdio: ['ignore', out, out, 'ipc'],
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HSIN_COMPANION_PORT: String(PORT), HSIN_VRM_MODEL: model } });
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HSIN_COMPANION_PORT: String(PORT), HSIN_PORT_FILE: '1', HSIN_VRM_MODEL: model } });
     child.on('message', (m) => { if (m?.type === 'cloth') clothRequest(child, m); });
   } else spawn('wsl.exe', ['-d', CFG.distro, '-e', `${CFG.repo}/mcp_server/companion.sh`, model], { windowsHide: true, detached: false });
   for (let i = 0; i < 100; i++) {         // up to ~30 s (the first WSL start can be slow)
@@ -487,6 +501,7 @@ ipcMain.handle('connectClientFile', async (_e, id) => {
   return out;
 });
 let creditsWin = null;
+ipcMain.handle('getOllama', () => shell.openExternal('https://ollama.com/download'));   // the only page this opens
 ipcMain.handle('openCredits', () => {
   if (creditsWin) { creditsWin.show(); creditsWin.focus(); return true; }
   creditsWin = new BrowserWindow({ width: 640, height: 720, title: 'VEviaH', icon: ICON, autoHideMenuBar: true });
@@ -567,7 +582,7 @@ app.whenReady().then(async () => {
   tray = new Tray(trayImg);
   tray.setToolTip(NAME);
   tray.on('click', () => openSettings());   // a left click opens the settings (Q14: new users look there)
-  chat = require('./chat_main.js')({ settings, saveSettings, BASE, tr, texts: () => i18n.T[uiLang()], instructions, icon: ICON, avatar: () => win, log, refreshMenu });
+  chat = require('./chat_main.js')({ settings, saveSettings, base: () => BASE, tr, texts: () => i18n.T[uiLang()], instructions, icon: ICON, avatar: () => win, log, refreshMenu });
   refreshMenu();
   log('start', app.getVersion(), 'model', currentModel(), 'scale', screen.getPrimaryDisplay().scaleFactor);
   const ok = await startCompanion(currentModel());

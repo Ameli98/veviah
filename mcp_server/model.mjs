@@ -1,7 +1,7 @@
 // The user's VRM and the solver's files for it, shared by the MCP server (server.mjs) and the desktop companion
 // (companion.mjs). Env: HSIN_VRM_MODEL = path to the .vrm (default: the default sample model).
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -71,3 +71,21 @@ export const motionFile = (id) => path.join(STORE, `${String(id).replace(/[^\w-]
 
 // Where the desktop companion listens (companion.mjs); the MCP server posts every solved motion there.
 export const COMPANION_PORT = Number(process.env.HSIN_COMPANION_PORT || 8790);
+// Ports can be taken by other programs (2026-11-14): the app picks a free one from 8790 up and the companion writes the
+// one it listens on to <config>/port.json; an MCP server started by an AI app (no env) reads it at every call, so no AI
+// app needs reconnecting. An explicit HSIN_COMPANION_PORT (the app, tests) always wins.
+export const PORT_FILE = path.join(CONFIG_DIR, 'port.json');
+export function companionPort() {
+  if (process.env.HSIN_COMPANION_PORT) return Number(process.env.HSIN_COMPANION_PORT);
+  try { const p = Number(JSON.parse(readFileSync(PORT_FILE, 'utf-8')).port); if (p > 0) return p; } catch { /* none yet */ }
+  return 8790;
+}
+// the first port from `start` nobody listens on (127.0.0.1)
+export async function freePort(start, tries = 40) {
+  const net = await import('node:net');
+  for (let p = start; p < start + tries; p++) {
+    const ok = await new Promise((res) => { const s = net.createServer().once('error', () => res(false)).once('listening', () => s.close(() => res(true))).listen(p, '127.0.0.1'); });
+    if (ok) return p;
+  }
+  throw new Error(`no free port in ${start}-${start + tries - 1}`);
+}

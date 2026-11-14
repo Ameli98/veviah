@@ -65,6 +65,7 @@
       <div class="row"><span data-t="hotkey"></span> <input id="hotkey" readonly style="width:170px;cursor:pointer"> <span class="note" id="hotkeyNote"></span></div>
       <div class="row"><button id="chatTest" data-t="chatTest"></button> <button class="main" id="openChat" data-t="openChat"></button></div>
       <div class="msg" id="mc"></div>
+      <div class="row" id="ollamaGetRow" style="display:none"><button class="main" id="ollamaGet" data-t="ollamaGet"></button></div>
     </div>
   </div>
 
@@ -181,7 +182,7 @@
     // the model drop-down is filled from the provider's own list (2026-11-13, the author: nobody types model names; a
     // service without a list is not supported); a search box once the list is long (OpenRouter: ~400)
     let urlOpen = false;
-    let CV = null, MODELS = null, modelsFor = null, modelsErr = null;
+    let CV = null, MODELS = null, modelsFor = null, modelsErr = null, modelsMsg = '';
     const SEARCH_FROM = 15;
     const CLAUDE = [['claude-opus-5-5', 'Claude Opus 5.5', '$4 / $20'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5', '$2 / $10'],
                     ['claude-haiku-5-5', 'Claude Haiku 5.5', '$0.1 / $0.5'], ['claude-fable-5-2', 'Claude Fable 5.2', '$8 / $40']].map(([id, name, price]) => ({ id, name, price }));
@@ -192,9 +193,12 @@
       modelsFor = k; MODELS = null; modelsErr = null;
       if (!CV.hasKey && !CV.local) { modelPicker(); return; }
       $('modelPick').innerHTML = `<option>${T.loadingModels}</option>`; $('modelPick').disabled = true;
+      // Ollama not running: the companion starts it (up to ~25 s); say so instead of a silent wait
+      const slow = CV.kind === 'ollama' ? setTimeout(() => { if (modelsFor === k) $('modelPick').innerHTML = `<option>${T.ollamaStarting}</option>`; }, 1500) : null;
       const r = await hsin.chatModels();
+      clearTimeout(slow);
       if (modelsFor !== k) return;
-      MODELS = r.ok ? r.models : []; modelsErr = r.ok ? null : r.error;
+      MODELS = r.ok ? r.models : []; modelsErr = r.ok ? null : r.error; modelsMsg = r.message ?? '';
       // Anthropic's list could not be fetched (a wrong key, no network): the four current Claude models (agreed 2026-11-13)
       if (!r.ok && CV.kind === 'anthropic') MODELS = CLAUDE;
       // nothing chosen yet, or the saved one is not offered: take the first
@@ -212,7 +216,8 @@
       pick.value = CV.model;
       const cur = all.find((m) => m.id === CV.model);
       $('priceNote').textContent = CV.local ? T.localNote : cur?.price ? fmt(T.priceNote, { p: cur.price }) : all.length ? T.otherPriceNote : '';
-      if (modelsErr) msg('mc', T.chatErr[modelsErr] ?? T.chatErr.other, false);
+      if (modelsErr) msg('mc', (T.chatErr[modelsErr] ?? T.chatErr.other) + (modelsErr === 'ollama_failed' && modelsMsg ? ` (${modelsMsg})` : ''), false);
+      $('ollamaGetRow').style.display = modelsErr === 'ollama_missing' ? '' : 'none';
     }
     async function chatView(v) {
       CV = v ?? await hsin.chatView();
@@ -257,10 +262,13 @@
     $('clearKey').onclick = async () => { await setChat({ clearKey: true }); msg('mc', ''); };
     $('chatTest').onclick = async () => {
       msg('mc', '…');
+      // Ollama: first (re)load the list, which starts Ollama when it is not running; its error says what is wrong
+      if (CV.kind === 'ollama') { modelsFor = null; await loadModels(); if (modelsErr) return; }
       const r = await hsin.chatTest();
       msg('mc', r.ok ? T.chatTestOk : (T.chatErr[r.error] ?? T.chatErr.other) + (r.error === 'other' && r.message ? ` (${r.message})` : ''), r.ok);
     };
     $('openChat').onclick = () => hsin.openChat();
+    $('ollamaGet').onclick = () => hsin.getOllama();
     $('credits').onclick = (e) => { e.preventDefault(); hsin.openCredits(); };
     // the hotkey field: click it, press the combination (Ctrl and / or Alt + a key, or an F key alone)
     $('hotkey').onfocus = () => { $('hotkey').value = T.hotkeyPress; };

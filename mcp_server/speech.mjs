@@ -18,7 +18,7 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { CACHE_DIR, CONFIG_DIR } from './model.mjs';
+import { CACHE_DIR, CONFIG_DIR, freePort } from './model.mjs';
 export const VOICES = process.env.HSIN_VOICES || path.join(CONFIG_DIR, 'voices.json');
 // The user's choice of reference clip per emotion and the clips they added, per voice (2026-11-12, the author: users
 // adjust the reference audio freely): <voice>.json = {emotion: {wav, text, lang}}, <voice>.added.list = refs.list lines
@@ -144,6 +144,9 @@ export class Speech {
         'custom:', `  bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large`,
         `  cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base`, '  device: cuda', '  is_half: true',
         `  t2s_weights_path: ${v.gpt}`, `  version: ${v.version ?? 'v2Pro'}`, `  vits_weights_path: ${v.sovits}`, ''].join('\n'));
+      // 9880 is GPT-SoVITS's own default: a user running it already holds it (2026-11-14): the next free one
+      this.port = await freePort(this.port);
+      this.base = `http://127.0.0.1:${this.port}`;
       const logFile = await fs.open(path.join(CACHE, `${v.name}.log`), 'w');
       // nltk data (English text front end) inside the TTS folder when the installer put it there
       this.proc = condaSpawn(v.python, [path.join(this.root, 'tts/gsv_api.py'), v.root, '-a', '127.0.0.1', '-p', String(this.port), '-c', cfg],

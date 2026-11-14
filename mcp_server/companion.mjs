@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { Speech, VOICES } from './speech.mjs';
 import { Chat } from './chat.mjs';
 import { VoiceInstaller, NEED_GB } from './voice_install.mjs';
-import { COMPANION_PORT, MODEL_HASH, MODEL_NAME, MODEL_PATH, ROOT, STORE, measured, motionFile, saveFit, PYTHON, PY_ENV, CACHE_DIR, CONFIG_DIR } from './model.mjs';
+import { COMPANION_PORT, MODEL_HASH, MODEL_NAME, MODEL_PATH, ROOT, STORE, measured, motionFile, saveFit, PYTHON, PY_ENV, CACHE_DIR, CONFIG_DIR, PORT_FILE } from './model.mjs';
 
 const PAGE = path.join(ROOT, 'vrm_player/dist-companion/companion.html');
 const PLAYER = path.join(ROOT, 'vrm_player/dist-player/index.html');   // the hidden cloth window's page (Windows app)
@@ -378,4 +378,8 @@ setInterval(() => { for (const c of clients) c.write(': ping\n\n'); }, 20000);  
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => { await speech.stop(); process.exit(0); });
 server.on('error', (e) => { log(e.code === 'EADDRINUSE' ? `port ${COMPANION_PORT} is in use (already running?)` : e.message); process.exit(1); });
 pruneIdle().catch((e) => log('prune', e.message));
-server.listen(COMPANION_PORT, '127.0.0.1', () => log(`model ${MODEL_PATH}; open http://localhost:${COMPANION_PORT}/`));
+server.listen(COMPANION_PORT, '127.0.0.1', () => {
+  log(`model ${MODEL_PATH}; open http://localhost:${COMPANION_PORT}/`);
+  // the AI apps' MCP servers find this port here (model.mjs companionPort); only the app's own companion writes it
+  if (process.env.HSIN_PORT_FILE === '1') fs.mkdir(CONFIG_DIR, { recursive: true }).then(() => fs.writeFile(PORT_FILE, JSON.stringify({ port: COMPANION_PORT, pid: process.pid }))).catch((e) => log('port file', e.message));
+});
