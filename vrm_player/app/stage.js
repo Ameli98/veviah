@@ -106,7 +106,8 @@ export function createStage(canvas, { background = 0xe9edf2, headroom = 0.3, foo
   function heldFit(v) {
     let top = -Infinity, bot = Infinity, side = 0;
     const p = new THREE.Vector3();
-    for (const [n, r] of HELD_PTS) {
+    for (const [n, r0] of HELD_PTS) {
+      const r = r0 * (n.endsWith('Hand') ? S.arm : S.leg);
       const b = state.vrm.humanoid.getNormalizedBoneNode(n);
       if (!b) continue;
       b.getWorldPosition(p);
@@ -134,7 +135,8 @@ export function createStage(canvas, { background = 0xe9edf2, headroom = 0.3, foo
   function heldRange() {               // top / bottom of the lifted body (bones of the last frame, with margins)
     let top = -Infinity, bot = Infinity;
     const p = new THREE.Vector3();
-    for (const [n, r] of HELD_PTS) {
+    for (const [n, r0] of HELD_PTS) {
+      const r = r0 * (n.endsWith('Hand') ? S.arm : S.leg);
       const b = state.vrm.humanoid.getNormalizedBoneNode(n);
       if (!b) continue;
       b.getWorldPosition(p);
@@ -222,6 +224,7 @@ export function createStage(canvas, { background = 0xe9edf2, headroom = 0.3, foo
     }
     state.player = new MotionPlayer(vrm);
     held.restHips = vrm.humanoid.getNormalizedBoneNode('hips').position.clone();   // T-pose hips: standing, legs straight
+    bodyScales(vrm);
     heldQ = null;
     console.info('face rig', completeExpressions(vrm));
     if (BROWS) console.info('brows over hair', initBrows(vrm));   // brows.js (2026-11-11)
@@ -328,7 +331,7 @@ export function createStage(canvas, { background = 0xe9edf2, headroom = 0.3, foo
     const e = smooth(held.w), f = state.vrm.meta?.metaVersion === '0' ? -1 : 1;
     for (const [n, q] of heldQ) node(n).quaternion.slerp(q, e);
     const hips = node('hips');
-    if (held.restHips) hips.position.lerp(new THREE.Vector3(held.restHips.x, held.restHips.y + HELD_LIFT, held.restHips.z), e);
+    if (held.restHips) hips.position.lerp(new THREE.Vector3(held.restHips.x, held.restHips.y + HELD_LIFT * S.leg, held.restHips.z), e);
     if (Math.abs(held.ang) > 1e-4 && e > 0) {
       // swing about a point just above the head, in the hips' parent space, about the axis toward the camera
       const parent = hips.parent;
@@ -345,7 +348,7 @@ export function createStage(canvas, { background = 0xe9edf2, headroom = 0.3, foo
         node(n)?.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, f), -HELD_LEG_LAG * held.vel * 0.1 * e));
     }
     if (dip) {                                          // landing: the knees give and the hips drop, then straighten
-      hips.position.y -= LAND_DIP * dip;
+      hips.position.y -= LAND_DIP * S.leg * dip;
       for (const [n, a2] of [['leftUpperLeg', -22], ['rightUpperLeg', -22], ['leftLowerLeg', 42], ['rightLowerLeg', 42], ['leftFoot', -18], ['rightFoot', -18]])
         node(n)?.quaternion.multiply(qa.setFromEuler(ea.set(a2 * d2r * dip * f, 0, 0)));
     }
@@ -527,7 +530,24 @@ export function createStage(canvas, { background = 0xe9edf2, headroom = 0.3, foo
   // the middle of the skull (head bone + half the measured head top), its upper half 'head', its lower half 'cheek'.
   // Sides are the character's own; front / back from where the chest faces. Returns {part, side} or null.
   // part: head, cheek, chest, belly, hips (front) / bottom (back), back, arm, hand, skirt (upper thigh), legs.
-  const PART_SEGS = [   // [part, from, to (null = a ball), radius m, side]
+  // Body-size ratios to the default model (2026-11-14, as skeleton.py LEG_SCALE / ARM_SCALE / HIPS_SCALE): radii and
+  // lengths below were set on the default model and are multiplied by the ratio of their part.
+  const REF = { arm: 0.4345, leg: 0.7684, hips: 0.9081 };
+  const S = { arm: 1, leg: 1, hips: 1 };
+  function bodyScales(vrm) {
+    vrm.scene.updateMatrixWorld(true);
+    const p = (n) => vrm.humanoid.getNormalizedBoneNode(n)?.getWorldPosition(new THREE.Vector3());
+    const d = (a, b) => { const A = p(a), B = p(b); return A && B ? A.distanceTo(B) : null; };
+    const arm = d('leftUpperArm', 'leftLowerArm') + d('leftLowerArm', 'leftHand');
+    const leg = d('leftUpperLeg', 'leftLowerLeg') + d('leftLowerLeg', 'leftFoot');
+    const hips = p('hips')?.y;
+    if (Number.isFinite(arm) && arm > 0) S.arm = arm / REF.arm;
+    if (Number.isFinite(leg) && leg > 0) S.leg = leg / REF.leg;
+    if (Number.isFinite(hips) && hips > 0) S.hips = hips / REF.hips;
+    console.info('body scales', JSON.stringify(S));
+  }
+  const PART_KIND = { chest: 'hips', belly: 'hips', hips: 'hips', arm: 'arm', hand: 'arm', skirt: 'leg', legs: 'leg' };
+  const PART_SEGS = [   // [part, from, to (null = a ball), radius m (default model), side]
     ['chest', 'upperChest', 'neck', 0.13], ['chest', 'chest', 'upperChest', 0.13], ['belly', 'spine', 'chest', 0.12],
     ['hips', 'hips', 'spine', 0.14],
     ['arm', 'leftUpperArm', 'leftLowerArm', 0.05, 'left'], ['arm', 'rightUpperArm', 'rightLowerArm', 0.05, 'right'],
@@ -538,11 +558,14 @@ export function createStage(canvas, { background = 0xe9edf2, headroom = 0.3, foo
     ['legs', 'leftLowerLeg', 'leftFoot', 0.06, 'left'], ['legs', 'rightLowerLeg', 'rightFoot', 0.06, 'right'],
     ['legs', 'leftFoot', 'leftToes', 0.06, 'left'], ['legs', 'rightFoot', 'rightToes', 0.06, 'right'],
   ];
-  const wp = (n) => { const b = node(n); return b ? b.getWorldPosition(new THREE.Vector3()) : null; };
+  // optional bones a model lacks stand in for each other as the player folds them (2026-11-14: a model without
+  // upperChest had no clickable chest)
+  const FOLD_TO = { upperChest: 'chest', chest: 'spine', neck: 'head', leftShoulder: 'leftUpperArm', rightShoulder: 'rightUpperArm' };
+  const wp = (n) => { const b = node(n) ?? (FOLD_TO[n] ? node(FOLD_TO[n]) ?? node(FOLD_TO[FOLD_TO[n]] ?? '') : null); return b ? b.getWorldPosition(new THREE.Vector3()) : null; };
   function boneAt(n) {
     if (n.endsWith('+')) {                     // a hand: from the wrist 9 cm on along the forearm
       const side = n.startsWith('left') ? 'left' : 'right', h = wp(`${side}Hand`), l = wp(`${side}LowerArm`);
-      return h && l ? h.clone().add(h.clone().sub(l).setLength(0.09)) : null;
+      return h && l ? h.clone().add(h.clone().sub(l).setLength(0.09 * S.arm)) : null;
     }
     if (n.endsWith('~')) {                     // half way down the thigh
       const side = n.startsWith('left') ? 'left' : 'right', a = wp(`${side}UpperLeg`), b = wp(`${side}LowerLeg`);
@@ -579,7 +602,8 @@ export function createStage(canvas, { background = 0xe9edf2, headroom = 0.3, foo
       const c = head.clone().add(new THREE.Vector3(0, headTop * 0.45, 0));
       consider('head', c, null, Math.max(headTop * 0.62, 0.08));
     }
-    for (const [part, a, b, r, side] of PART_SEGS) {
+    for (const [part, a, b, r0, side] of PART_SEGS) {
+      const r = r0 * S[PART_KIND[part]];
       const pa = boneAt(a), pb = b ? boneAt(b) : null;
       if (pa && (pb || !b)) consider(part, pa, pb, r, side);
     }
@@ -666,7 +690,8 @@ export function createStage(canvas, { background = 0xe9edf2, headroom = 0.3, foo
     if (!state.vrm) return null;
     const H = state.vrm.humanoid, v = new THREE.Vector3();
     let wl = Infinity, wr = -Infinity, sy = 0, n = 0;
-    for (const [name, r] of BOX_PTS) {
+    for (const [name, r0] of BOX_PTS) {
+      const r = r0 * (name.endsWith('UpperArm') ? S.arm : S.hips);   // as skeleton.WALL_PTS (arm) / WALL_HIP_R (hips)
       const b = H.getNormalizedBoneNode(name);
       if (!b) continue;
       b.getWorldPosition(v);

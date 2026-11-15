@@ -142,16 +142,17 @@ def hair_chains(fit):
     for c in fit.get("hair") or []:
         P = np.asarray(c["pts"], float) - h
         r, t = P[0], P[-1]
-        if t[1] > r[1] or np.linalg.norm(t - r) < 0.02:
+        k = sk.HEAD_SCALE                            # thresholds set on the default model's head
+        if t[1] > r[1] or np.linalg.norm(t - r) < 0.02 * k:
             continue
         drop = r[1] - t[1]
-        if r[2] > 0.04 and abs(r[0]) < 0.08 and r[1] > 0.06:
+        if r[2] > 0.04 * k and abs(r[0]) < 0.08 * k and r[1] > 0.06 * k:
             out["bangs"].append(P)
-        elif abs(r[0]) > 0.06 and r[2] > -0.015 and drop > 0.08 and t[2] > -0.03:
+        elif abs(r[0]) > 0.06 * k and r[2] > -0.015 * k and drop > 0.08 * k and t[2] > -0.03 * k:
             out["side_left" if r[0] > 0 else "side_right"].append(P)
-        elif r[2] < -0.04 and r[1] > 0.15:
+        elif r[2] < -0.04 * k and r[1] > 0.15 * k:
             out["ponytail"].append(P)
-        elif r[2] < -0.015:
+        elif r[2] < -0.015 * k:
             out["back"].append(P)
     for k in ("side_left", "side_right"):            # the longest strand on each side
         out[k] = sorted(out[k], key=lambda P: P[0][1] - P[-1][1])[-1:]
@@ -669,14 +670,14 @@ def _target(region, side, f, P, G, L, fit, along=None, pair=False, crossed=False
         hip = L[f"{s}Hip"][f]
         y0 = fit.get("floor", 0.0) or 0.0
         if bone == "behind":
-            p = np.array([hip[0] + sx * 0.12, y0, hip[2] - 0.24])
+            p = np.array([hip[0] + sx * FLOOR_BEHIND[0], y0, hip[2] - FLOOR_BEHIND[1]])
         elif bone == "front":
             knee = L[f"{s}Knee"][f]
             p = np.array([knee[0] + sx * FLOOR_FRONT_OUT, y0, knee[2] + FLOOR_FRONT])
         elif bone == "edge":
-            p = np.array([hip[0] + sx * 0.13, y0, hip[2] + 0.05])
+            p = np.array([hip[0] + sx * FLOOR_EDGE[0], y0, hip[2] + FLOOR_EDGE[1]])
         else:                                   # beside and a little behind the hip, arm slanting out (2026-10-28)
-            p = np.array([hip[0] + sx * 0.22, y0, hip[2] - 0.08])
+            p = np.array([hip[0] + sx * FLOOR_BESIDE[0], y0, hip[2] - FLOOR_BESIDE[1]])
         n = np.array([0, 1.0, 0])
     else:
         raise ValueError(region)
@@ -1311,7 +1312,7 @@ def _face_along(region, with_, Gh, sx, n, Gt=None):
     if kind in ("flat", "back") and REGIONS.get(region, ("",))[0] != "hair":   # along the surface (hair is no
         # surface: the fingers go THROUGH the strand, 2026-11-10)
         d = d - n * (d @ n)
-    return _unit(d), Gh @ sh
+    return _unit(d), Gh @ (sh * sk.HEAD_SCALE)          # shifts set on the default model's head
 
 
 def _resolve_once(obj, prev, todo, duration_s, fit):
@@ -1345,7 +1346,7 @@ def _resolve_once(obj, prev, todo, duration_s, fit):
         Gt, S = G["upperChest"][f], P[f"{side}UpperArm"][f]
         sx = 1.0 if side == "left" else -1.0
         if region == "other_hand":                                 # meet in front of the chest
-            mid = P["upperChest"][f] + Gt @ np.array([0.0, -0.02, 0.27])
+            mid = P["upperChest"][f] + Gt @ (np.array([0.0, -0.02, 0.27]) * sk.ARM_SCALE)
             p, n = mid + Gt @ np.array([sx * 0.025, 0, 0]), Gt @ np.array([sx, 0, 0])   # palms ~5 cm apart (bone centres)
         else:
             crossed = region.startswith("other_")
@@ -1360,6 +1361,13 @@ def _resolve_once(obj, prev, todo, duration_s, fit):
             region = hair_region(region, tside, fit)
             p, n = _target(region, tside, f, P, G, L, fit, arm.get("_along"), pair, crossed, with_,
                            arm.get("at") if REGIONS[region][0] == "hair" else None)
+            if region == "thigh" and arm.get("upper_dir") is None:
+                # the top of a thigh drawn up against the belly (knees hugged) has no room for a hand: it goes on the
+                # outer side instead (2026-11-14: a small model's hands were sandwiched between thigh and belly)
+                q = (p + n * (HAND_HALF + sk.ARM_R["forearm"]))[None]
+                if sk.torso_depth(q, {k: v[f:f + 1] for k, v in P.items()}, {k: v[f:f + 1] for k, v in G.items()})[0][0] > -THIGH_ROOM:
+                    region = "thigh_side"
+                    p, n = _target(region, tside, f, P, G, L, fit, None, pair, crossed, with_)
             if REGIONS[region][0] == "floor" and arm.get("upper_dir") is not None:
                 # a hand on the floor read from a reference (2026-10-29, the author: the floor in the pictures is not exactly
                 # flat or at our height): only flat on our floor; where on it follows the arm as read
@@ -1412,7 +1420,7 @@ def _resolve_once(obj, prev, todo, duration_s, fit):
         # wrist: the heel of the hand on the spot, the hand along the surface past it (T012: the cheek resting on the
         # wrist, fingers up the side of the face)
         reach = {"fingertips": sk.FINGERTIP, "index": sk.FINGERTIP, "fingers": FINGERS_AT * sk.FINGERTIP, "wrist": 0.0}.get(with_, sk.PALM)
-        off = HAND_HALF * (2.0 if with_ == "fist" else 1.0) + (0.01 if REGIONS[region][0] == "head" else 0.0)
+        off = HAND_HALF * (2.0 if with_ == "fist" else 1.0) + (HEAD_STANDOFF if REGIONS[region][0] == "head" else 0.0)
         if region == "mouth" and with_ in ("index", "fingertips"):
             off = MOUTH_TIP_OFF                 # a fingertip just in front of the lips (was 0.005 = ON them: it dipped into the face)
             # a fingertip ON the lips (the hand-half + hair standoff left it 2.8 cm in front, 2026-11-10)
@@ -1519,7 +1527,7 @@ def _resolve_once(obj, prev, todo, duration_s, fit):
         if fa is not None and arm.get("elbow") == "together" and r0 == "cheek":
             d_, sh_ = (np.array(v, float) * np.array([sx, 1.0, 1.0]) for v in TOGETHER_JAW)
             d_ = G["head"][f] @ d_
-            fa = (_unit(d_ - n * (d_ @ n)), G["head"][f] @ sh_)
+            fa = (_unit(d_ - n * (d_ @ n)), G["head"][f] @ (sh_ * sk.HEAD_SCALE))
         if fa is not None:                               # a preferred hand direction (see the loop below)
             palm_pt = palm_pt + fa[1]
             if h_pref is None and arm.get("upper_dir") is not None:
@@ -1783,3 +1791,77 @@ def _leave_moving_legs(motion, root, kt, kfs, frames):
             pw[f0 + 1:f1] = (want - W)[f0 + 1:f1]
             _resolve(motion, side, -sx, P, G_, pw, np.zeros((T, 3)))
             P, G_ = sk.upper_fk(motion, root, JIDX)
+
+
+# Floor spots beside / behind / at the edge (outward, back or forward of the hip joint), the head standoff
+FLOOR_BEHIND, FLOOR_EDGE, FLOOR_BESIDE = (0.12, 0.24), (0.13, 0.05), (0.22, 0.08)
+HEAD_STANDOFF = 0.01       # m: hair over the head
+# hand-set lengths of this module, scaled per model by the part they belong to (2026-11-14: a small model's short arms
+# could not reach spots placed in metres on the default model); exactly unchanged on the default model
+_CONTACT_BASE = {n: (globals()[n], kind) for n, kind in (
+    ("HAND_HALF", "arm"), ("CLOTH_LAT", "arm"), ("CLOTH_FOOT", "arm"), ("LEG_SIDE_BY_SIDE", "arm"), ("TOGETHER_X", "arm"),
+    ("TOGETHER_Z", "arm"), ("ELBOW_ON_UP", "arm"), ("WRAP_ABOVE", "hips"), ("REACH_TOL", "arm"), ("NEAR_TOL", "arm"),
+    ("CLEAR_TOL", "arm"), ("FLOOR_FRONT", "arm"), ("FLOOR_FRONT_OUT", "arm"), ("FLOOR_SLACK", "arm"), ("LEG_SLACK", "arm"),
+    ("HAIR_OFF", "arm"), ("MOUTH_TIP_OFF", "head"), ("FLOOR_BEHIND", "arm"), ("FLOOR_EDGE", "arm"),
+    ("FLOOR_BESIDE", "arm"), ("HEAD_STANDOFF", "head"))}
+sk.on_model_change(lambda: sk.scale_constants(globals(), _CONTACT_BASE))
+
+
+# A touch whose arm was read from a reference (upper_dir) may need a very different arm on another body (a big head
+# and short arms: the upper arm turned from down-forward to up, 2026-11-14), while the rows around it keep the arm as
+# read: the arm then swung through the difference in one 0.1 s step. The turn from the reading to the solved upper arm
+# is spread over the free rows within FIT_SPREAD seconds before and after the touch (full at the touch, none at the
+# edge), turning the whole arm (upper, fore, palm vector) with it. On the default model the turn is a few degrees.
+FIT_SPREAD = 0.3
+THIGH_ROOM = 0.02           # m a hand on top of a thigh needs between it and the trunk
+
+
+def _turn_between(a, b):
+    a, b = _unit(np.asarray(a, float)), _unit(np.asarray(b, float))
+    v, c = np.cross(a, b), float(np.clip(a @ b, -1, 1))
+    s = np.linalg.norm(v)
+    if s < 1e-9:
+        return np.zeros(3)
+    return v / s * np.arccos(c)                      # axis * angle
+
+
+def _rotvec(rv, x):
+    th = np.linalg.norm(rv)
+    if th < 1e-12:
+        return np.asarray(x, float)
+    k = rv / th; x = np.asarray(x, float)
+    return x * np.cos(th) + np.cross(k, x) * np.sin(th) + k * (k @ x) * (1 - np.cos(th))
+
+
+def spread_touch_fit(obj, ref=None):
+    """ref: the same keyframes resolved on the default model (refine.solve). The turn from the default model's solved
+    arm to this model's, per bone (upper, fore), is spread over the free rows near each read touch."""
+    if not isinstance(obj, dict) or not isinstance(ref, dict):
+        return obj
+    kfs, rkfs = obj["keyframes"], ref["keyframes"]
+    for side in ("left", "right"):
+        key = f"{side}_arm"
+        fits = []                                        # (t, upper turn, fore turn) of each read touch
+        for k, rk in zip(kfs, rkfs):
+            a, b = k.get(key), rk.get(key)
+            if (isinstance(a, dict) and a.get("touch") and a.get("upper_dir") is not None and a.get("upper") is not None
+                    and isinstance(b, dict) and b.get("upper") is not None):
+                fits.append((float(k.get("t", 0)), _turn_between(b["upper"], a["upper"]), _turn_between(b["fore"], a["fore"])))
+        if not fits:
+            continue
+        for k in kfs:
+            a = k.get(key)
+            if not (isinstance(a, dict) and not a.get("touch") and a.get("upper") is not None and a.get("fore") is not None):
+                continue
+            t = float(k.get("t", 0))
+            d, ru, rf = min(((abs(t - ft), u, f) for ft, u, f in fits), key=lambda x: x[0])
+            if d >= FIT_SPREAD:
+                continue
+            w = 1 - d / FIT_SPREAD
+            a = dict(a)
+            a["upper"] = [float(x) for x in _rotvec(ru * w, a["upper"])]
+            a["fore"] = [float(x) for x in _rotvec(rf * w, a["fore"])]
+            if isinstance(a.get("palm"), (list, tuple)):
+                a["palm"] = [float(x) for x in _rotvec(rf * w, a["palm"])]
+            k[key] = a
+    return obj

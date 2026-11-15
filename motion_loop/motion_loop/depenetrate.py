@@ -449,7 +449,27 @@ STEP_SPREAD = 4          # frames on each side over which a one-frame jump is sp
 SPIKE_MIN, SPIKE_RATIO = 4.0, 3.0   # rad/s; a frame this many times faster than its neighbours
 
 
-def smooth_steps(motion, keys=None):
+def _keep_path(q, lo, hi):
+    """Spread the steps of q[lo..hi] but keep the path's shape (2026-11-15): the frame-to-frame turns are smoothed
+    with a Hann kernel and integrated from q[lo]; the end error is blended out linearly, so q[hi] stays. Used where the
+    plain slerp across the window would pull a pushed-out arm back into the body."""
+    from .rotations import rotvec as quat_to_rotvec, from_rotvec as rotvec_to_quat
+    seg = q[lo:hi + 1]
+    v = quat_to_rotvec(quat_mul(quat_conj(seg[:-1]), seg[1:]))
+    k = np.hanning(2 * STEP_SPREAD + 3)[1:-1]; k /= k.sum()
+    pad = np.concatenate([np.repeat(v[:1], STEP_SPREAD, 0), v, np.repeat(v[-1:], STEP_SPREAD, 0)])
+    vs = np.stack([np.convolve(pad[:, i], k, mode="valid") for i in range(3)], -1)
+    out = [seg[0]]
+    for d in rotvec_to_quat(vs):
+        out.append(quat_mul(out[-1], d))
+    out = np.array(out)
+    u = np.linspace(0, 1, len(out))[:, None]
+    err = quat_mul(quat_conj(out[-1]), seg[-1])
+    corr = slerp(np.repeat(np.array([[0, 0, 0, 1.0]]), len(u), 0), np.repeat(err[None], len(u), 0), u)
+    return np.array([quat_mul(a, c) for a, c in zip(out, corr)])
+
+
+def smooth_steps(motion, keys=None, root=None):
     """Spread one-frame jumps (and sharp changes of speed) of the arm joints (2026-10-28): where the push-out starts or ends, the re-solved arm may
     differ from the frame before by a step (S065: the forearm's twist changed 45 deg in one frame, 25 rad/s). Any arm
     joint frame faster than the filter's limit is replaced, with STEP_SPREAD frames on each side, by a slerp across
@@ -491,7 +511,20 @@ def smooth_steps(motion, keys=None):
                         hi = k
                 u = (np.arange(lo, hi + 1) - lo) / max(hi - lo, 1)
                 u = u * u * (3 - 2 * u)
+                old = m[lo:hi + 1, j].copy()
                 m[lo:hi + 1, j] = slerp(np.repeat(q[lo][None], len(u), 0), np.repeat(q[hi][None], len(u), 0), u[:, None])
+                if root is not None:        # the slerp must not pull a pushed-out arm back into the body
+                    def depth(win):         # (frames inside, deepest), as the filter counts frames
+                        m[lo:hi + 1, j] = win
+                        d = sk.hand_body_depth(m[lo:hi + 1].astype(np.float32), root[lo:hi + 1], JIDX)
+                        return int((d > 0).sum()), round(float(max(d.max(), 0.0)), 4)
+                    lerp = m[lo:hi + 1, j].copy()
+                    d0, d1 = depth(old), depth(lerp)
+                    if d1 > d0:
+                        kp = _keep_path(old, 0, len(old) - 1)
+                        m[lo:hi + 1, j] = min((depth(lerp), 0, lerp), (depth(kp), 1, kp), key=lambda x: x[:2])[2]
+                    else:
+                        m[lo:hi + 1, j] = lerp
     return continuous(m).astype(np.float32)
 
 
@@ -514,3 +547,8 @@ def smooth_upper(motion):
             acc += wo * m[idx, j]
         out[:, j] = acc / np.linalg.norm(acc, axis=-1, keepdims=True)
     return out.astype(np.float32)
+
+
+# hand-set lengths of this module, scaled by the active model's arms (2026-11-14); MARGIN stays (IK round-off)
+_DP_BASE = {n: (globals()[n], "arm") for n in ("LIFT_MIN", "LIFT_STEPS", "CROSS_MIN", "TIPS_CROSS_WRISTS")}
+sk.on_model_change(lambda: sk.scale_constants(globals(), _DP_BASE))

@@ -4,7 +4,7 @@
 // BROW_DY above the middle of what 'blink' moves (the eyes), and moved almost entirely by both 'angry' and 'sad'.
 // While her face is turned toward the camera it is drawn last and without the depth test; turned away, normally.
 import * as THREE from 'three';
-const BROW_MAX_VERTS = 400, BROW_MIN_W = 0.06, BROW_DY = [0.012, 0.05], BROW_MOVED = 0.9, FACE_DOT = 0.25;
+const BROW_MAX_VERTS = 600, BROW_MIN_W = 0.06, BROW_DY = [0.012, 0.05], BROW_MOVED = 0.9, FACE_DOT = 0.25;
 
 function movedSets(vrm, name) {
   const out = new Map();

@@ -56,6 +56,15 @@ def solve(obj, duration_s, model=None, cloth=None):
         from .contact import resolve_touches                    # touch words -> arm directions for this model
         obj0 = obj
         obj = resolve_touches(resolve_arm_words(obj), duration_s) if isinstance(obj, dict) else obj
+        if isinstance(obj, dict) and not sk.CANONICAL and sk.MODEL != sk.DEFAULT_MODEL and any(
+                isinstance(k.get(f"{s}_arm"), dict) and k[f"{s}_arm"].get("upper_dir") is not None
+                for k in obj["keyframes"] for s in ("left", "right")):
+            # an arm read from a reference: how this body's touch differs from the default model's spreads to the
+            # rows around it (contact.spread_touch_fit, 2026-11-14)
+            from .contact import spread_touch_fit
+            with sk.use_model(sk.DEFAULT_MODEL):
+                ref = resolve_touches(resolve_arm_words(obj0), duration_s)
+            obj = spread_touch_fit(obj, ref)
         provider = CLOTH_PROVIDER if cloth is None else cloth
         if provider and isinstance(obj, dict):
             # The legs first, then the cloth, then the hands (2026-10-29, the author): when a hand rests on a leg the
@@ -87,7 +96,7 @@ def solve(obj, duration_s, model=None, cloth=None):
             if DEPENETRATE:
                 from .depenetrate import depenetrate, lift_paths, remove_flips, smooth_steps   # arms around the body
                 motion = smooth_steps(remove_flips(depenetrate(lift_paths(motion, root, times), root)),
-                                      keys=[int(round(t * kf.FPS)) for t in times])
+                                      keys=[int(round(t * kf.FPS)) for t in times], root=root)
             if linear:
                 from .depenetrate import smooth_upper
                 motion = smooth_upper(motion)                       # linear segments have velocity steps at the keyframes

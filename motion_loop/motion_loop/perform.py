@@ -104,12 +104,65 @@ def known_model(name):
     return name if (Path(sk.__file__).parent / "skeletons" / f"{name}.json").exists() else sk.DEFAULT_MODEL
 
 
+# A motion that fails only on speed on THIS body is slowed where it is too fast (2026-11-14, the author: a small model's
+# turn and head pat went past the joint speed limits that the default model stays under): the keyframe intervals
+# within RETIME_WIN seconds of the fastest frame are stretched by RETIME_STEP, up to RETIME_TRIES times (at most
+# ~33 % slower there); the rest of the motion keeps its timing and only shifts later. A motion that passes is never
+# touched, so the default model's motions stay as they are.
+RETIME_STEP, RETIME_TRIES, RETIME_WIN = 1.1, 3, 0.25
+SPEED = {"velocity", "acceleration"}
+
+
+def _stretched(req, frame):
+    from .keyframes import FPS
+    kfs = req["keyframes"]
+    ts = [float(k.get("t", 0)) for k in kfs]
+    t0 = frame / FPS
+    order = sorted(range(len(kfs)), key=lambda i: ts[i])
+    new_t, shift = {}, 0.0
+    for a, b in zip(order, order[1:]):
+        if a == order[0]:
+            new_t[a] = ts[a]
+        d = ts[b] - ts[a]
+        if ts[b] >= t0 - RETIME_WIN and ts[a] <= t0 + RETIME_WIN:     # an interval near the fast frame
+            shift += d * (RETIME_STEP - 1)
+        new_t[b] = ts[b] + shift
+    if len(order) == 1:
+        new_t[order[0]] = ts[order[0]]
+    return {**req, "keyframes": [{**k, "t": round(new_t[i], 4)} for i, k in enumerate(kfs)]}, shift
+
+
+def retime(req, out):
+    """out = _solve_request(req). Returns (out, seconds added)."""
+    import numpy as np
+    from .filters import speed_excess
+    added = 0.0
+    for _ in range(RETIME_TRIES):
+        if not out["problems"] or not set(out["problems"]) <= SPEED:
+            break
+        mo = out["motion"]
+        m = np.asarray(mo["rotations"], float)
+        root = np.asarray(mo.get("root") or np.zeros((len(m), 3)), float)
+        ex = speed_excess(m, root)
+        req2, extra = _stretched(req, int(np.argmax(ex)))
+        if extra <= 0:
+            break
+        out2 = _solve_request(req2)
+        bad = lambda o: len(set(o["problems"]) - SPEED) > 0
+        if bad(out2):
+            break                                     # slowing broke something else: keep the faster one
+        req, out, added = req2, out2, added + extra
+    return out, added
+
+
 def solve_request(req):
     # small format slips with one meaning are fixed and reported back (lenient.py, 2026-11-12)
     from .lenient import normalize, hint
     req, notes = normalize(req)
     try:
         out = _solve_request(req)
+        out, slowed = retime(req, out)
+        out["slowed"] = round(slowed, 3)                  # s added where it was too fast for this body (not a format fix)
     except ValueError as e:
         h = hint(str(e))
         raise ValueError(f"{e}" + (f" -- fix: {h}" if h else "")) from None
@@ -140,6 +193,11 @@ def _solve_request(req):
             motion, root, hands = solve(obj, duration, model=model, cloth=cloth)
         finally:
             cloth.close()
+    import numpy as np
+    if not (np.isfinite(motion).all() and np.isfinite(root).all()):
+        # never hand broken numbers on (2026-11-14: a user's model gave NaN, the companion's JSON.parse threw and the
+        # companion died, so the character stopped moving)
+        raise RuntimeError("solver produced non-finite numbers (NaN) for this model")
     problems = check_motion(motion, root, model=model, posture=obj["posture"], wall=obj.get("wall"))
     eyes = kf.eyes_track(obj, duration)
     return {"motion": to_vrm_json(motion, hands=hands, root=root, eyes=eyes), "duration": duration,
@@ -195,15 +253,26 @@ def serve():
             except Exception as e:                               # bad keyframes: tell the LLM what was wrong
                 out = {"error": f"{type(e).__name__}: {e}"}
                 msg = msg if isinstance(msg, dict) else {}
-            sys.stdout.write(json.dumps({"id": msg.get("id"), **out}) + "\n")
+            sys.stdout.write(_dumps({"id": msg.get("id"), **out}) + "\n")
             sys.stdout.flush()
     finally:
         CLOTH.close()
 
 
+def _dumps(out):
+    """JSON without NaN / Infinity (not valid JSON; JSON.parse in Node throws on them)."""
+    try:
+        return json.dumps(out, allow_nan=False)
+    except ValueError:
+        return json.dumps({k: v for k, v in out.items() if k in ("id",)} |
+                          {"error": "RuntimeError: solver produced non-finite numbers (NaN) for this model"})
+
+
 def _solve_safe(req):
     try:
-        return solve_request(req)
+        out = solve_request(req)
+        json.dumps(out, allow_nan=False)
+        return out
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"}
 
@@ -234,13 +303,13 @@ def main():
                 out = pool.map(_solve_safe, reqs)
         else:
             out = [_solve_safe(r) for r in reqs]
-        json.dump(out, sys.stdout)
+        sys.stdout.write(json.dumps(out, allow_nan=False))
         return
     try:
         out = solve_request(json.load(sys.stdin))
     except Exception as e:                                       # bad keyframes: tell the LLM what was wrong
         out = {"error": f"{type(e).__name__}: {e}"}
-    json.dump(out, sys.stdout)
+    sys.stdout.write(_dumps(out))
 
 
 if __name__ == "__main__":

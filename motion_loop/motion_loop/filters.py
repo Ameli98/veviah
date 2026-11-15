@@ -79,11 +79,19 @@ def thigh_spread(m):
     return np.degrees(np.arccos(np.clip((d[0] * d[1]).sum(-1), -1, 1)))
 
 
+PLANTED_UP, TOES_UP, FLOAT_UP = 0.015, 0.02, 0.02   # m above the rest ankle / toes: planted, ball down, floating
+_FILTER_BASE = dict(MAX_HIPS_SPEED=(MAX_HIPS_SPEED, "leg_sqrt"), WALL_TOL=(WALL_TOL, "arm"), FLOOR_TOL=(FLOOR_TOL, "leg"),
+                    MAX_SLIDE_SPEED=(MAX_SLIDE_SPEED, "leg"), LAND_SLIDE=(LAND_SLIDE, "leg"),
+                    PLANTED_UP=(PLANTED_UP, "leg"), TOES_UP=(TOES_UP, "leg"), FLOAT_UP=(FLOAT_UP, "leg"))
+
+
 @sk.on_model_change
 def _foot_heights():
     global PLANTED_Y, TOES_DOWN_Y
-    PLANTED_Y = sk.ANKLE_REST_Y + 0.015
-    TOES_DOWN_Y = sk.ANKLE_REST_Y + sk.TOE[1] + 0.02
+    # lengths set on the default model, scaled by the active model's legs / arms (2026-11-14, small models)
+    sk.scale_constants(globals(), _FILTER_BASE)
+    PLANTED_Y = sk.ANKLE_REST_Y + PLANTED_UP
+    TOES_DOWN_Y = sk.ANKLE_REST_Y + sk.TOE[1] + TOES_UP
 # NOTE: self-collision needs mesh/capsule geometry and is not implemented here.
 # NOTE: no check that elbows bend the right way: the joint-position retarget cannot know the upper-arm
 # twist, so its elbows bend about an arbitrary local axis and such a check would reject all of it.
@@ -133,8 +141,8 @@ def jump_window(m, root):
     if root is None or T < 3:
         return win
     pts = sk.motion_leg_points(m.astype(float), root.astype(float), JIDX)
-    standing = root[:, 1] * sk.HIPS_Y > -0.3
-    off = {s: (pts[f"{s}Ankle"][:, 1] > PLANTED_Y + 0.02) & (pts[f"{s}Toes"][:, 1] > TOES_DOWN_Y) for s in ("left", "right")}
+    standing = root[:, 1] * sk.HIPS_Y > -0.3 * sk.LEG_SCALE
+    off = {s: (pts[f"{s}Ankle"][:, 1] > PLANTED_Y + FLOAT_UP) & (pts[f"{s}Toes"][:, 1] > TOES_DOWN_Y) for s in ("left", "right")}
     for a, b in jump_runs(standing & off["left"] & off["right"], root, pts, off)[0]:
         win[max(0, a - int(JUMP_PAD_BEFORE * FPS)):min(T, b + int(JUMP_PAD_AFTER * FPS) + 1)] = True
     return win
@@ -156,7 +164,7 @@ def check_legs(m, root, posture=None):
         if len(a) < 2:
             continue
         # standing feet only: a sitting leg that changes shape slides its foot over the floor on purpose
-        stand = root[:, 1] * sk.HIPS_Y > -0.3
+        stand = root[:, 1] * sk.HIPS_Y > -0.3 * sk.LEG_SCALE
         down = (a[:-1, 1] < PLANTED_Y) & (a[1:, 1] < PLANTED_Y) & stand[:-1] & stand[1:]
         speed = np.linalg.norm(np.diff(a[:, [0, 2]], axis=0), axis=-1) * FPS
         slide = down & (speed > MAX_SLIDE_SPEED)
@@ -167,9 +175,9 @@ def check_legs(m, root, posture=None):
         if best > MAX_SLIDE_FRAMES:
             reasons.append("foot_slide")
             break
-    standing = root[:, 1] * sk.HIPS_Y > -0.3
+    standing = root[:, 1] * sk.HIPS_Y > -0.3 * sk.LEG_SCALE
     # a foot is on the floor if its heel (ankle) or its ball (toes, on tiptoe) is down
-    off = {s: (pts[f"{s}Ankle"][:, 1] > PLANTED_Y + 0.02) & (pts[f"{s}Toes"][:, 1] > TOES_DOWN_Y)
+    off = {s: (pts[f"{s}Ankle"][:, 1] > PLANTED_Y + FLOAT_UP) & (pts[f"{s}Toes"][:, 1] > TOES_DOWN_Y)
            for s in ("left", "right")}
     up = standing & off["left"] & off["right"]
     flights, bad = jump_runs(up, root, pts, off)
@@ -252,3 +260,23 @@ def filter_candidates(cands, workdir):
         c["filter"] = "reject" if reasons else "pass"
         c["filter_reasons"] = reasons
     return cands
+
+
+def speed_excess(m, root=None):
+    """Per frame, the largest joint speed or acceleration as a fraction of its limit (as check_motion counts them);
+    > 1 = over. Used to find where a motion must be slowed (perform.retime)."""
+    T = len(m)
+    out = np.zeros(T)
+    if T < 3:
+        return out
+    w = angular_velocity(m.astype(float), FPS)
+    win = jump_window(m, root)
+    jw = win[:-1] | win[1:]
+    vlim = np.where(jw[:, None] & LEG_JOINTS[None], MAX_VEL_JUMP, MAX_VEL[None])
+    v = (np.linalg.norm(w, axis=-1) / vlim).max(-1)
+    acc = np.linalg.norm(np.diff(w, axis=0), axis=-1) * FPS
+    alim = np.where((jw[:-1] | jw[1:])[:, None] & LEG_JOINTS[None], MAX_ACC_JUMP, MAX_ACC)
+    a = (acc / alim).max(-1)
+    out[1:] = np.maximum(out[1:], v)
+    out[1:-1] = np.maximum(out[1:-1], a)
+    return out

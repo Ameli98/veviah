@@ -43,19 +43,27 @@ def hand_point(height, across, reach, side):
     L = _len(f"{side}UpperArm", f"{side}LowerArm") + _len(f"{side}LowerArm", f"{side}Hand")
     sx = 1.0 if side == "left" else -1.0
     sy, hy = S[1], R["head"][1]
-    y = {"above_head": sy + 0.9 * L, "head": hy + 0.11, "face": hy + 0.02, "shoulder": sy,
-         "chest": R["upperChest"][1] - 0.02, "waist": R["spine"][1] + 0.04, "hip": R["hips"][1],
-         "low": R["hips"][1] - 0.13}[height]
-    x = sx * {"other_side": -abs(S[0]), "center": 0.0, "front": abs(S[0]), "out": abs(S[0]) + 0.18,
-              "wide": abs(S[0]) + 0.55}[across]
-    z = {"back": -0.18, "beside": 0.0, "close": 0.22, "mid": 0.32, "far": 0.32}[reach]
+    a, h = sk.ARM_SCALE, sk.HEAD_SCALE                   # offsets set on the default model (2026-11-14: per body)
+    y = {"above_head": sy + 0.9 * L, "head": hy + 0.11 * h, "face": hy + 0.02 * h, "shoulder": sy,
+         "chest": R["upperChest"][1] - 0.02 * a, "waist": R["spine"][1] + 0.04 * a, "hip": R["hips"][1],
+         "low": R["hips"][1] - 0.13 * a}[height]
+    x = sx * {"other_side": -abs(S[0]), "center": 0.0, "front": abs(S[0]), "out": abs(S[0]) + 0.18 * a,
+              "wide": abs(S[0]) + 0.55 * a}[across]
+    z = a * {"back": -0.18, "beside": 0.0, "close": 0.22, "mid": 0.32, "far": 0.32}[reach]
     if reach == "far" and height == "above_head":
         z = 0.0                                          # straight up, as in hands_meet (T026: it leaned 45 deg forward)
     W = np.array([x, y, R["upperChest"][2] + z])
+    if reach in ("close", "mid"):                        # at least the default model's smallest gap in front of the
+        # body (11 cm at chest / waist height), scaled by the arm: on a small model with a deep torso a hand "close" at
+        # the hip stood 5 cm off the belly and its bent fingers went in (2026-11-14); the default model is unchanged
+        W[2] = max(W[2], _rest_front(W[0], W[1]) + CLOSE_GAP * a)
     if reach == "far":                                   # stretch toward the point
         d = W - S
         W = S + d / max(np.linalg.norm(d), 1e-9) * FAR * L
     return W, S
+
+
+CLOSE_GAP = 0.11
 
 
 def _pole(height, across, reach, elbow, side):
@@ -348,7 +356,7 @@ def cross_arms(how="fold", top="left", offset=0.0):
             y = y0 + (CROSS_UP if side == top else 0.0) - float(offset) / 100.0
             W = np.array([-sx * COVER_PAST, y, _front(-sx * COVER_PAST, y, rf + 0.003, rf)])
             px, py = -sx * (COVER_PAST + COVER_HAND[0]), y + COVER_HAND[1]
-            P = np.array([px, py, _front(px, py, COVER_HAND[2], 0.012)])   # on the clothes: half a hand off them
+            P = np.array([px, py, _front(px, py, COVER_HAND[2], 0.012 * sk.ARM_SCALE)])   # on the clothes: half a hand off them
             h = P - W
         else:
             # the palm on the front-top of the other shoulder, the fingers over it (up and out); the wrist a hand back
@@ -365,7 +373,17 @@ def cross_arms(how="fold", top="left", offset=0.0):
             u, f = _solve(W, S, side, pole, at_wrist=True)
             E = S + u * _len(f"{side}UpperArm", f"{side}LowerArm")
             if side == low:
-                break
+                if how != "fold":
+                    break
+                # the whole lower forearm on the body's front, not only its wrist (2026-11-14: on a small model with
+                # an adult-deep belly the mid forearm lay inside it, and the push-out lifted it into the top forearm)
+                uu = np.linspace(0, 1, 11)[:, None]
+                A = E + uu * (W - E)
+                need = max(_rest_front(float(p[0]), float(p[1])) + rf + 0.003 - float(p[2]) for p in A)
+                if need <= 1e-4:
+                    break
+                W = W + np.array([0.0, 0.0, need + 0.002])
+                continue
             # the top forearm in front of the lower one: its wrist moves forward until they clear (raising the
             # elbow instead put the forearm across the mouth in a self-hug)
             Eo, Wo = segs[low]
@@ -523,3 +541,11 @@ def resolve_arm_words(obj):
     return obj
 
 
+
+
+# hand-set lengths of this module, scaled by the active model's arms (head for the roof over the hair), 2026-11-14
+_AW_BASE = {n: (globals()[n], kind) for n, kind in (
+    ("MEET_PALM_X", "arm"), ("MEET_TIP_X", "arm"), ("MEET_TIP_UP", "head"), ("COVER_PAST", "arm"), ("COVER_HAND", "arm"),
+    ("CROSS_Y", "arm"), ("CROSS_PAST", "arm"), ("CROSS_UP", "arm"), ("CROSS_GAP", "arm"), ("HUG_UP", "arm"),
+    ("HUG_OFF", "arm"))}
+sk.on_model_change(lambda: sk.scale_constants(globals(), _AW_BASE))

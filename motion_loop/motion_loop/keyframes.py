@@ -180,7 +180,8 @@ HEIGHT_DROP = {"straight": 0.0, "bent": 0.07, "crouch": 0.16, "squat": 0.30}   #
 HEIGHT_BACK = {"straight": 0.0, "bent": 0.0, "crouch": -0.04, "squat": -0.10}   # hips back (balance)
 # On tiptoe the planted heels rise this much and the foot tilts so the ball of the foot stays on the floor
 # (the author, 2026-10-23: "rise onto your toes" had no word, so Haiku lifted one foot instead).
-TIPTOE_UP = 0.045
+TIPTOE_UP = TIPTOE_UP_DEFAULT = 0.045
+TIPTOE_UP_MAX_S = 0.95     # sine of the foot's angle from the floor at the most (models so far 0.66-0.89 at 4.5 cm: unchanged)
 STANCE_X = {"together": 0.05, "normal": 0.10, "wide": 0.22}                     # ankle |x|
 PLACE_OFF = {"home": (0.0, 0.0), "forward": (0.0, 0.30), "back": (0.0, -0.25), "out": (0.16, 0.0),  # (outward, forward)
              "lunge_forward": (0.0, 0.55), "lunge_out": (0.36, 0.0),
@@ -217,11 +218,35 @@ LIFT_OFF = {
 }
 
 
+# Leg lengths above were set on the default model; per model they are scaled by its leg length (skeleton.LEG_SCALE,
+# 2026-11-14: on a small body a 0.30 m step / 0.56 m knee lift / 0.25 m jump went past the joint and speed limits).
+_LEG_BASE = {n: globals()[n] for n in ("WEIGHT_X", "HEIGHT_DROP", "HEIGHT_BACK", "STANCE_X", "PLACE_OFF", "LUNGE_DROP",
+                                       "HIP_OUT_X", "HIP_FOOT_OUT", "HIP_KNEEL_X")}
+_LIFT_BASE = {d: dict(v) for d, v in LIFT_OFF.items()}
+_FLAT0 = LIFT_OFF["forward"]["down"][3]          # the flat-foot marker in the table (sk.FLAT at import)
+_LEG_BASE2 = {}       # filled further down (PIVOT, STEP_ARC, KNEES_IN_DROP, JUMP_EXT, FOOT_Z_OFF)
+
+
+@sk.on_model_change
+def _leg_constants():
+    k = sk.LEG_SCALE
+    for n, v in _LEG_BASE.items():
+        globals()[n] = sk.scaled(v, k)
+    for d, table in _LIFT_BASE.items():          # (up, outward, forward) scale; the toe direction does not
+        for lift, e in table.items():
+            # the flat-foot entries take this model's flat foot (sk.FLAT); the others keep their toe direction
+            LIFT_OFF[d][lift] = tuple(x * k for x in e[:3]) + (sk.FLAT if e[3] is _FLAT0 else e[3],)
+
+
 @sk.on_model_change
 def _foot_constants():
     """Constants that depend on the active model's foot (skeleton.use_model)."""
-    global TIPTOE_DIR, FOOT_Z
-    _s = (TIPTOE_UP - sk.TOE[1]) / np.linalg.norm(sk.TOE)
+    global TIPTOE_DIR, FOOT_Z, TIPTOE_UP
+    # heels up by at most what this foot allows (2026-11-14: a small user model's foot could not reach 4.5 cm with
+    # the toes on the floor, the angle below became NaN and every heel lift / turn came out broken)
+    _len = float(np.linalg.norm(sk.TOE))
+    TIPTOE_UP = float(np.clip(TIPTOE_UP_MAX_S * _len + sk.TOE[1], 0.0, TIPTOE_UP_DEFAULT * sk.LEG_SCALE))
+    _s = (TIPTOE_UP - sk.TOE[1]) / _len
     TIPTOE_DIR = np.array([0.0, -_s, np.sqrt(1 - _s * _s)])
     FOOT_Z = float((sk.HIPS_REST + sk.HIP_OFFSET + sk.THIGH + sk.SHIN)[2])   # ankle z at rest
     for dir_, lift in (("forward", "down"), ("forward", "lift"), ("side", "down"), ("side", "lift"), ("back", "down")):
@@ -659,7 +684,7 @@ def _stand_targets(row):
     wfoot = {"left": "left", "right": "right"}.get(weight)
     over = [wfoot] if wfoot in planted else planted     # the hips stand over the weight foot (2026-10-29, T020: a free
     # foot stepped forward on its toes pulled the hips 8 cm forward)
-    hips[2] += HEIGHT_BACK[height] + 0.5 * np.mean([floor[s][2] + 0.0324 for s in over])
+    hips[2] += HEIGHT_BACK[height] + 0.5 * np.mean([floor[s][2] + FOOT_Z_OFF for s in over])
     # Lower the hips until every planted foot is within reach (with the knee a little bent: a straight
     # knee is a singular point of the IK, where tiny hip moves swing the knee fast). Done per keyframe,
     # so the interpolated hips path stays smooth.
@@ -790,6 +815,19 @@ JUMP = {   # H flight height (m), crouch / land depth (m), phase times (s), foot
                 bend=0.05, tuck=0.22, lean=16.0, back=-45.0, fwd=70.0),
 }
 JUMP_TOE_DEG = 55.0        # toes pointed down in the air (degrees below horizontal)
+FLAT_PITCH0 = float(np.arctan2(0.0631, 0.1107))   # the default foot's own pitch at rest (skeleton.TOE)
+FOOT_Z_OFF = 0.0324        # m: the hips stand this much in front of half the weight foot's z (default model)
+_JUMP_LEN = ("H", "crouch", "land", "bend", "tuck")
+_LEG_BASE2.update(PIVOT=PIVOT, STEP_ARC=STEP_ARC, KNEES_IN_DROP=KNEES_IN_DROP, JUMP_EXT=JUMP_EXT, FOOT_Z_OFF=FOOT_Z_OFF)
+_JUMP_BASE = {k: dict(v) for k, v in JUMP.items()}
+
+
+@sk.on_model_change
+def _jump_constants():
+    for n, v in _LEG_BASE2.items():
+        globals()[n] = sk.scaled(v, sk.LEG_SCALE)
+    for size, J in _JUMP_BASE.items():
+        JUMP[size] = {a: (b * sk.LEG_SCALE if a in _JUMP_LEN else b) for a, b in J.items()}
 
 
 def _jump_params(row):
@@ -1067,7 +1105,8 @@ def _legs_frames(posture, times, rows, k, w, pivot=True):
         ws = np.where(e["rising"], second, np.where(e["falling"], first,
              np.where(e["moved"], np.where(step_first, first, np.where(o["falling"] | o["moved"], second, w)), w)))
         a = a0[side][k] * (1 - ws[:, None]) + a0[side][k + 1] * ws[:, None]
-        # a foot that stays down but changes place steps: lift it on the way
+        # a foot that stays down but changes place steps: lift it on the way (a softer landing was tried on
+        # 2026-11-14 for a small model's knee snap: either the lunge foot slid or the default's turn neared the limit)
         a[:, 1] += np.where(e["moved"], STEP_ARC * 4 * ws * (1 - ws), 0.0)
         ankles[side] = a
         toes[side] = t0[side][k] * (1 - ws[:, None]) + t0[side][k + 1] * ws[:, None]
@@ -1080,7 +1119,10 @@ def _legs_frames(posture, times, rows, k, w, pivot=True):
             hd = np.where(hz > 1e-6, tv / np.maximum(hz, 1e-9), fwd); hd[:, 1] = 0
             hd /= np.linalg.norm(hd, axis=-1, keepdims=True)
             base = np.arctan2(-tv[:, 1], hz[:, 0])
-            pitch = base * (1 - jump["heel"]) + a_tip * jump["heel"] + jump["point"] * (np.deg2rad(JUMP_TOE_DEG) - a_tip)
+            # toes pointed in the air: JUMP_TOE_DEG on the default foot, the same turn past this foot's own flat
+            # pitch on others (2026-11-14: a heeled foot already 50 deg down at rest went 72 -> 55 -> 72 deg in a jump)
+            a_pt = np.deg2rad(JUMP_TOE_DEG) + np.arctan2(-sk.FLAT[1], np.hypot(sk.FLAT[0], sk.FLAT[2])) - FLAT_PITCH0
+            pitch = base * (1 - jump["heel"]) + a_tip * jump["heel"] + jump["point"] * (a_pt - a_tip)
             toes[side] = hd * np.cos(pitch)[:, None] + np.array([0.0, -1.0, 0.0]) * np.sin(pitch)[:, None]
     for side in ("left", "right"):
         for f in range(T):

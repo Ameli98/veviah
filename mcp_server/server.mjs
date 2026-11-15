@@ -281,7 +281,7 @@ ${FORMAT}`,
     currentPosture = posture;
     fixes.push(...(res.notes ?? []));
     const id = res.id;
-    log(`motion ${id}: ${res.duration}s on ${res.model}, ${Date.now() - t0} ms, problems: ${res.problems.join(',') || 'none'}${subtitle ? ', with subtitle' : ''}${safe ? ', safe version' : ''}`);
+    log(`motion ${id}: ${res.duration}s on ${res.model}, ${Date.now() - t0} ms, problems: ${res.problems.join(',') || 'none'}${subtitle ? ', with subtitle' : ''}${safe ? ', safe version' : ''}${res.slowed ? `, slowed ${res.slowed} s for this body` : ''}`);
     // the standing turn it ends in (legs.turn carried forward), so the companion's idle actions keep her facing
     let endTurn = 0;
     if (posture === 'stand') for (const k of keyframes) if (k?.legs && typeof k.legs === 'object' && Number.isFinite(Number(k.legs.turn))) endTurn = Number(k.legs.turn);

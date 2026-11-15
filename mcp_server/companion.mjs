@@ -86,7 +86,12 @@ function batchSolve(reqs) {
     p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { err += d; });
     p.on('error', reject);
-    p.on('close', (code) => (code === 0 ? resolve(JSON.parse(out)) : reject(new Error(`solver exited ${code}: ${err.slice(-300)}`))));
+    p.on('close', (code) => {
+      if (code !== 0) return reject(new Error(`solver exited ${code}: ${err.slice(-300)}`));
+      // bad output (e.g. NaN from a model the solver cannot handle) fails this batch only; thrown here it was uncaught
+      // and the companion died (2026-11-14, a user's model)
+      try { resolve(JSON.parse(out)); } catch (e) { reject(new Error(`solver output unreadable: ${e.message.slice(0, 200)}`)); }
+    });
     p.stdin.end(JSON.stringify({ reqs }));
   });
 }
@@ -180,6 +185,9 @@ async function pruneIdle() {
   if (gone || motions) log(`pruned ${gone} stale list(s) and ${motions} unused idle motion(s) of ${MODEL_NAME}`);
 }
 const log = (...a) => console.error('[companion]', ...a);
+// one bad request must never take the whole companion down (the character would stop moving until a restart)
+process.on('uncaughtException', (e) => log('uncaught', e?.stack ?? e));
+process.on('unhandledRejection', (e) => log('unhandled rejection', e?.stack ?? e));
 const speech = new Speech({ log, root: ROOT });
 const chat = new Chat({ port: COMPANION_PORT, configDir: CONFIG_DIR, log,
   langs: () => ({ voice: speech.settings.voice ? (speech.settings.voiceLang ?? speech.voice?.lang ?? null) : null, ui: speech.settings.uiLang }) });

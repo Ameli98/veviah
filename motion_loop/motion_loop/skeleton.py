@@ -18,6 +18,7 @@ HIPS_Y = HIPS_REST[1]                                 # unit of the root offset 
 HIP_OFFSET = np.array([0.0772, -0.0398, -0.0037])    # hips -> left upper leg (right: x negated)
 THIGH = np.array([0.0, -0.3529, -0.0074])            # upper leg -> lower leg (knee)
 SHIN = np.array([0.0, -0.4147, -0.0249])             # lower leg -> foot (ankle)
+LEG_SCALE = ARM_SCALE = HEAD_SCALE = HIPS_SCALE = 1.0   # body-size ratios to the default model (_set_scales)
 TOE = np.array([0.0, -0.0631, 0.1107])               # foot -> toes
 L_THIGH, L_SHIN = np.linalg.norm(THIGH), np.linalg.norm(SHIN)
 ANKLE_REST_Y = 0.1007                                 # ankle height when the foot is flat on the floor
@@ -283,7 +284,7 @@ def sit_hips(R, name=None):
     # A foot under the bottom (seiza) carries it: the bottom rests on the heel instead of the floor.
     for side in ("left", "right"):
         a = pts[f"{side}Ankle"]
-        if np.hypot(*(a - pts["butt"])[[0, 2]]) < 0.12:
+        if np.hypot(*(a - pts["butt"])[[0, 2]]) < 0.12 * LEG_SCALE:
             low = min(low, pts["butt"][1] - (a[1] + R_ANKLE + 0.03))
     return np.array([HIPS_REST[0], -low, HIPS_REST[2]])
 
@@ -434,7 +435,7 @@ def _leg_profile(model="VRM1_Constraint_Twist_Sample", pct=75):
         r = np.linalg.norm(P - a - t[:, None] * ab, axis=1)
         ts, rs = [], []
         for lo in np.arange(0.0, 1.0, 0.1):
-            m = (t >= lo) & (t < lo + 0.1) & (r < 0.15)
+            m = (t >= lo) & (t < lo + 0.1) & (r < 0.15 * LEG_SCALE)
             if m.sum() > 3:
                 ts.append(lo + 0.05); rs.append(max(float(np.percentile(r[m], pct)), LEG_R[name]))
         out[name] = (np.array(ts), np.array(rs))
@@ -486,6 +487,8 @@ def key_points(motion, root, jidx):
     return np.stack([P[n] for n in KEY_POINTS], 1)
 
 
+HAND_MID, HAND_MID_T = 0.11, (0.11 - 0.0699014) / (0.1509 - 0.0699014)   # a mid-finger point: 0.11 m on the default
+# model's hand (palm 0.0699, fingertip 0.1509), the same fraction of the way palm -> fingertip on other hands
 HANDS_MIN = 0.02       # palm / finger points of the two hands closer than this (bone centres; a hand is ~3 cm thick)
 
 
@@ -515,7 +518,7 @@ def hands_overlap(motion, root, jidx):
     pts = {}
     for side, sx in (("left", 1.0), ("right", -1.0)):
         pts[side] = [P[f"{side}Hand"] + np.einsum("tij,j->ti", G[f"{side}Hand"], np.array([sx * d, 0.0, 0.0]))
-                     for d in (0.0, PALM, 0.11, FINGERTIP)]
+                     for d in (0.0, PALM, HAND_MID if CANONICAL else PALM + HAND_MID_T * (FINGERTIP - PALM), FINGERTIP)]   # (0.11 on the default model)
     dist = np.min([np.linalg.norm(a - b, axis=-1) for a in pts["left"] for b in pts["right"]], axis=0)
     return HANDS_MIN - dist
 
@@ -800,11 +803,58 @@ def set_model(name=None):
     L_THIGH, L_SHIN = np.linalg.norm(THIGH), np.linalg.norm(SHIN)
     FLAT = _unit(TOE)
     MODEL = name
+    _set_scales()
     for fn in _HOOKS:
         fn()
 
 
 TORSO = _skin_torso(_DEFAULTS["TORSO"], _fit(DEFAULT_MODEL), 1.0)   # the default model's skin torso from the start
+
+
+# Body-size ratios of the active model to the default model (2026-11-14, the author: every hand-set length must fit any
+# body; a friend's small model (hips 0.60 m) failed on fixed metre distances). Lengths hand-tuned on the default model
+# are multiplied by the ratio of the part they belong to: legs (steps, stance, squat, jump, kneeling), arms (hand
+# positions, contact offsets), head (hair, face offsets). Exactly 1 on the default model and the canonical skeleton,
+# so their motions do not change.
+_REF = None
+
+
+def _measures(arm=None):
+    """(leg length, arm length, head size, hips height) of the active model."""
+    up = arm or UPPER_REST
+    a = np.linalg.norm(np.subtract(up["leftLowerArm"], up["leftUpperArm"])) + \
+        np.linalg.norm(np.subtract(up["leftHand"], up["leftLowerArm"]))
+    return float(L_THIGH + L_SHIN), float(a), float(np.mean(HEAD["r"])), float(HIPS_Y)
+
+
+def _set_scales():
+    global LEG_SCALE, ARM_SCALE, HEAD_SCALE, HIPS_SCALE, _REF
+    if CANONICAL or MODEL == DEFAULT_MODEL:
+        LEG_SCALE = ARM_SCALE = HEAD_SCALE = HIPS_SCALE = 1.0
+        return
+    if _REF is None:                                     # the default model's own measures, read once
+        cur = MODEL
+        set_model(DEFAULT_MODEL)                          # (its hooks run with scale 1)
+        _REF = _measures()
+        set_model(cur)
+        return                                            # the nested call already set this model's scales and hooks
+    m = _measures()
+    LEG_SCALE, ARM_SCALE, HEAD_SCALE, HIPS_SCALE = (x / r for x, r in zip(m, _REF))
+
+
+def scaled(v, k):
+    """v (number, tuple, list, dict of those, np array) times k; strings / None untouched."""
+    if isinstance(v, dict):
+        return {a: scaled(b, k) for a, b in v.items()}
+    if isinstance(v, tuple):
+        return tuple(scaled(x, k) for x in v)
+    if isinstance(v, list):
+        return [scaled(x, k) for x in v]
+    if isinstance(v, np.ndarray):
+        return v * k
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return v * k
+    return v
 
 
 @_contextmanager
@@ -816,3 +866,23 @@ def use_model(name):
         yield
     finally:
         set_model(prev)
+
+
+# hand-set lengths of this module, scaled per model (see LEG_SCALE above); the default model keeps them exactly
+_SK_BASE = dict(KNEEL_KNEES=(KNEEL_KNEES, "leg"), LEG_TOL=(LEG_TOL, "leg"), LEGS_TOL=(LEGS_TOL, "leg"),
+                HANDS_MIN=(HANDS_MIN, "arm"), ARMS_TOL=(ARMS_TOL, "arm"), WALL_HIP_R=(WALL_HIP_R, "hips"),
+                WALL_PTS=(WALL_PTS, "arm"), WALL_ARM_PTS=(WALL_ARM_PTS, "arm"))
+
+
+def scale_of(kind):
+    # leg_sqrt: speeds of falling / jumping bodies go with the square root of their size (dynamic similarity)
+    return {"leg": LEG_SCALE, "arm": ARM_SCALE, "head": HEAD_SCALE, "hips": HIPS_SCALE, "leg_sqrt": LEG_SCALE ** 0.5}[kind]
+
+
+def scale_constants(g, base):
+    """Set g[name] = base value scaled by its part's ratio, for {name: (value, kind)}."""
+    for n, (v, kind) in base.items():
+        g[n] = scaled(v, scale_of(kind))
+
+
+on_model_change(lambda: scale_constants(globals(), _SK_BASE))
